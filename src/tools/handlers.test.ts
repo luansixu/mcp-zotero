@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { handleToolCall, formatErrorResponse } from "./server.js";
+import { describe, it, expect } from "vitest";
+import { handleToolCall } from "./index.js";
+import { formatErrorResponse } from "../utils/error-formatter.js";
 import {
   createZoteroApiMock,
   fullItemFixture,
   minimalItemFixture,
   collectionFixture,
-} from "./__mocks__/zotero-api.mock.js";
+} from "../__mocks__/zotero-api.mock.js";
 
 const TEST_USER_ID = "12345";
 
@@ -256,7 +257,6 @@ describe("get_recent", () => {
     expect(parsed[0].title).toBe("Deep Learning for Natural Language Processing");
     expect(parsed[0].dateAdded).toBe("2024-02-01T10:30:00Z");
 
-    // Verify default limit=10 is passed
     expect(getStub).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 10 })
     );

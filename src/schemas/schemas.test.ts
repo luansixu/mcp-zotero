@@ -4,7 +4,7 @@ import {
   GetItemDetailsSchema,
   SearchLibrarySchema,
   GetRecentSchema,
-} from "./server.js";
+} from "./index.js";
 
 describe("GetCollectionItemsSchema", () => {
   it("accepts valid collectionKey", () => {
