@@ -52,3 +52,7 @@ debug.log
 # Optional: local development files
 dev/
 local/
+
+.docs/
+*.md
+.claude/

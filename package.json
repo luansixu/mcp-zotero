@@ -8,7 +8,8 @@
   },
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "build": "tsc && chmod +x build/server.js",
     "postbuild": "echo '#!/usr/bin/env node' | cat - build/server.js > temp && mv temp build/server.js",
     "start": "node build/server.js"
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@types/node": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^4.0.18"
   }
 }
