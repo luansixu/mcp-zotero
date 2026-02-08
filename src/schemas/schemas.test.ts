@@ -3,20 +3,24 @@ import { z } from "zod";
 import { toolConfig as collectionItemsConfig } from "../tools/get-collection-items.js";
 import { toolConfig as itemsDetailsConfig } from "../tools/get-items-details.js";
 import { toolConfig as searchConfig } from "../tools/search-library.js";
-import { toolConfig as recentConfig } from "../tools/get-recent.js";
 import { toolConfig as createCollectionConfig } from "../tools/create-collection.js";
 import { toolConfig as addItemsByDoiConfig } from "../tools/add-items-by-doi.js";
 import { toolConfig as injectCitationsConfig } from "../tools/inject-citations.js";
 import { toolConfig as getItemFulltextConfig } from "../tools/get-item-fulltext.js";
+import { toolConfig as addLinkedUrlAttachmentConfig } from "../tools/add-linked-url-attachment.js";
+import { toolConfig as addWebItemConfig } from "../tools/add-web-item.js";
+import { toolConfig as importPdfToZoteroConfig } from "../tools/import-pdf-to-zotero.js";
 
 const GetCollectionItemsSchema = z.object(collectionItemsConfig.inputSchema);
 const GetItemsDetailsSchema = z.object(itemsDetailsConfig.inputSchema);
 const SearchLibrarySchema = z.object(searchConfig.inputSchema);
-const GetRecentSchema = z.object(recentConfig.inputSchema);
 const CreateCollectionSchema = z.object(createCollectionConfig.inputSchema);
 const AddItemsByDoiSchema = z.object(addItemsByDoiConfig.inputSchema);
 const InjectCitationsSchema = z.object(injectCitationsConfig.inputSchema);
 const GetItemFulltextSchema = z.object(getItemFulltextConfig.inputSchema);
+const AddLinkedUrlAttachmentSchema = z.object(addLinkedUrlAttachmentConfig.inputSchema);
+const AddWebItemSchema = z.object(addWebItemConfig.inputSchema);
+const ImportPdfToZoteroSchema = z.object(importPdfToZoteroConfig.inputSchema);
 
 describe("GetCollectionItemsSchema", () => {
   it("accepts valid collectionKey", () => {
@@ -72,30 +76,56 @@ describe("SearchLibrarySchema", () => {
     expect(result.query).toBe("machine learning");
   });
 
-  it("rejects missing query", () => {
-    expect(() => SearchLibrarySchema.parse({})).toThrow();
+  it("accepts omitted query (for listing mode)", () => {
+    const result = SearchLibrarySchema.parse({});
+    expect(result.query).toBeUndefined();
   });
 
   it("rejects non-string query", () => {
     expect(() => SearchLibrarySchema.parse({ query: true })).toThrow();
   });
-});
 
-describe("GetRecentSchema", () => {
-  it("accepts valid limit", () => {
-    const result = GetRecentSchema.parse({ limit: 25 });
+  it("defaults sort to dateAdded", () => {
+    const result = SearchLibrarySchema.parse({});
+    expect(result.sort).toBe("dateAdded");
+  });
+
+  it("accepts valid sort values", () => {
+    for (const sort of ["dateAdded", "dateModified", "title", "creator", "date"]) {
+      const result = SearchLibrarySchema.parse({ sort });
+      expect(result.sort).toBe(sort);
+    }
+  });
+
+  it("rejects invalid sort value", () => {
+    expect(() => SearchLibrarySchema.parse({ sort: "invalid" })).toThrow();
+  });
+
+  it("defaults direction to desc", () => {
+    const result = SearchLibrarySchema.parse({});
+    expect(result.direction).toBe("desc");
+  });
+
+  it("accepts asc direction", () => {
+    const result = SearchLibrarySchema.parse({ direction: "asc" });
+    expect(result.direction).toBe("asc");
+  });
+
+  it("defaults limit to 25", () => {
+    const result = SearchLibrarySchema.parse({});
     expect(result.limit).toBe(25);
   });
 
-  it("defaults limit to 10 when omitted", () => {
-    const result = GetRecentSchema.parse({});
-    expect(result.limit).toBe(10);
+  it("accepts custom limit", () => {
+    const result = SearchLibrarySchema.parse({ limit: 50 });
+    expect(result.limit).toBe(50);
   });
 
   it("rejects non-number limit", () => {
-    expect(() => GetRecentSchema.parse({ limit: "ten" })).toThrow();
+    expect(() => SearchLibrarySchema.parse({ limit: "ten" })).toThrow();
   });
 });
+
 
 describe("CreateCollectionSchema", () => {
   it("accepts valid name", () => {
@@ -187,5 +217,160 @@ describe("GetItemFulltextSchema", () => {
   it("defaults max_characters to 50000", () => {
     const result = GetItemFulltextSchema.parse({ item_key: "ABC12345" });
     expect(result.max_characters).toBe(50000);
+  });
+});
+
+describe("AddLinkedUrlAttachmentSchema", () => {
+  it("accepts valid URL (only required field)", () => {
+    const result = AddLinkedUrlAttachmentSchema.parse({
+      url: "https://arxiv.org/abs/2301.00001",
+    });
+    expect(result.url).toBe("https://arxiv.org/abs/2301.00001");
+  });
+
+  it("rejects missing url", () => {
+    expect(() => AddLinkedUrlAttachmentSchema.parse({})).toThrow();
+  });
+
+  it("rejects invalid url", () => {
+    expect(() =>
+      AddLinkedUrlAttachmentSchema.parse({ url: "not-a-url" })
+    ).toThrow();
+  });
+
+  it("accepts optional title and content_type", () => {
+    const result = AddLinkedUrlAttachmentSchema.parse({
+      url: "https://example.com/paper.pdf",
+      title: "My Paper",
+      content_type: "application/pdf",
+    });
+    expect(result.title).toBe("My Paper");
+    expect(result.content_type).toBe("application/pdf");
+  });
+
+  it("accepts optional parent_item", () => {
+    const result = AddLinkedUrlAttachmentSchema.parse({
+      url: "https://example.com/paper.pdf",
+      parent_item: "ITEM001",
+    });
+    expect(result.parent_item).toBe("ITEM001");
+  });
+
+  it("accepts optional collections", () => {
+    const result = AddLinkedUrlAttachmentSchema.parse({
+      url: "https://example.com/paper.pdf",
+      collections: ["COL001", "COL002"],
+    });
+    expect(result.collections).toEqual(["COL001", "COL002"]);
+  });
+
+  it("accepts optional tags", () => {
+    const result = AddLinkedUrlAttachmentSchema.parse({
+      url: "https://example.com/paper.pdf",
+      tags: ["ai", "nlp"],
+    });
+    expect(result.tags).toEqual(["ai", "nlp"]);
+  });
+});
+
+describe("AddWebItemSchema", () => {
+  it("accepts url + title (required fields)", () => {
+    const result = AddWebItemSchema.parse({
+      url: "https://www.nature.com/articles/123",
+      title: "AI in 2024",
+    });
+    expect(result.url).toBe("https://www.nature.com/articles/123");
+    expect(result.title).toBe("AI in 2024");
+  });
+
+  it("rejects missing url", () => {
+    expect(() =>
+      AddWebItemSchema.parse({ title: "AI in 2024" })
+    ).toThrow();
+  });
+
+  it("rejects missing title", () => {
+    expect(() =>
+      AddWebItemSchema.parse({ url: "https://example.com" })
+    ).toThrow();
+  });
+
+  it("accepts optional website_title, date, and collection_key", () => {
+    const result = AddWebItemSchema.parse({
+      url: "https://www.nature.com/articles/123",
+      title: "AI in 2024",
+      website_title: "Nature News",
+      date: "2024-03-15",
+      collection_key: "COL001",
+    });
+    expect(result.website_title).toBe("Nature News");
+    expect(result.date).toBe("2024-03-15");
+    expect(result.collection_key).toBe("COL001");
+  });
+
+  it("accepts optional creators", () => {
+    const result = AddWebItemSchema.parse({
+      url: "https://example.com",
+      title: "Test",
+      creators: [{ firstName: "John", lastName: "Smith" }],
+    });
+    expect(result.creators).toEqual([{ firstName: "John", lastName: "Smith" }]);
+  });
+
+  it("accepts optional tags", () => {
+    const result = AddWebItemSchema.parse({
+      url: "https://example.com",
+      title: "Test",
+      tags: ["ai"],
+    });
+    expect(result.tags).toEqual(["ai"]);
+  });
+});
+
+describe("ImportPdfToZoteroSchema", () => {
+  it("accepts valid URL (only required field)", () => {
+    const result = ImportPdfToZoteroSchema.parse({
+      url: "https://arxiv.org/pdf/2301.00001.pdf",
+    });
+    expect(result.url).toBe("https://arxiv.org/pdf/2301.00001.pdf");
+  });
+
+  it("rejects missing url", () => {
+    expect(() => ImportPdfToZoteroSchema.parse({})).toThrow();
+  });
+
+  it("rejects invalid url", () => {
+    expect(() =>
+      ImportPdfToZoteroSchema.parse({ url: "not-a-url" })
+    ).toThrow();
+  });
+
+  it("accepts optional filename and title", () => {
+    const result = ImportPdfToZoteroSchema.parse({
+      url: "https://example.com/paper.pdf",
+      filename: "my-paper.pdf",
+      title: "My Paper",
+    });
+    expect(result.filename).toBe("my-paper.pdf");
+    expect(result.title).toBe("My Paper");
+  });
+
+  it("defaults content_type to application/pdf", () => {
+    const result = ImportPdfToZoteroSchema.parse({
+      url: "https://example.com/paper.pdf",
+    });
+    expect(result.content_type).toBe("application/pdf");
+  });
+
+  it("accepts optional parent_item, collections, and tags", () => {
+    const result = ImportPdfToZoteroSchema.parse({
+      url: "https://example.com/paper.pdf",
+      parent_item: "PARENT01",
+      collections: ["COL001"],
+      tags: ["ai", "nlp"],
+    });
+    expect(result.parent_item).toBe("PARENT01");
+    expect(result.collections).toEqual(["COL001"]);
+    expect(result.tags).toEqual(["ai", "nlp"]);
   });
 });

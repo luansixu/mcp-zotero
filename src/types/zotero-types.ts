@@ -36,6 +36,10 @@ export interface ZoteroItemData {
   parentCollection?: string;
   numItems?: number;
   name?: string;
+  linkMode?: string;
+  parentItem?: string;
+  websiteTitle?: string;
+  accessDate?: string;
 }
 
 export interface ZoteroItem {

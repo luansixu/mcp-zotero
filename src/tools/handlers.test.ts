@@ -259,27 +259,73 @@ describe("search_library", () => {
     expect(parsed[0].key).toBe("ABC12345");
   });
 
-  it("passes query parameter to API", async () => {
+  it("passes query and default sort params to API", async () => {
     const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
     await handleToolCall("search_library", { query: "test query" }, mock, TEST_USER_ID);
 
-    expect(getStub).toHaveBeenCalledWith({ q: "test query" });
+    expect(getStub).toHaveBeenCalledWith({
+      q: "test query",
+      sort: "dateAdded",
+      direction: "desc",
+      limit: 25,
+    });
   });
 
-  it("returns error for empty query", async () => {
-    const { mock } = createZoteroApiMock([]);
+  it("returns recent items when query is omitted (replaces get_recent)", async () => {
+    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
+    const result = await handleToolCall("search_library", {}, mock, TEST_USER_ID);
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].title).toBe("Deep Learning for Natural Language Processing");
+    expect(parsed[0].dateAdded).toBe("2024-02-01T10:30:00Z");
+
+    expect(getStub).toHaveBeenCalledWith({
+      sort: "dateAdded",
+      direction: "desc",
+      limit: 25,
+    });
+  });
+
+  it("caps limit at 100", async () => {
+    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
+    await handleToolCall("search_library", { limit: 500 }, mock, TEST_USER_ID);
+
+    expect(getStub).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 100 })
+    );
+  });
+
+  it("passes custom sort and direction", async () => {
+    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
+    await handleToolCall(
+      "search_library",
+      { sort: "title", direction: "asc", limit: 5 },
+      mock,
+      TEST_USER_ID
+    );
+
+    expect(getStub).toHaveBeenCalledWith({
+      sort: "title",
+      direction: "asc",
+      limit: 5,
+    });
+  });
+
+  it("does not include dateAdded when sort is not dateAdded", async () => {
+    const { mock } = createZoteroApiMock([fullItemFixture]);
     const result = await handleToolCall(
       "search_library",
-      { query: "   " },
+      { sort: "title" },
       mock,
       TEST_USER_ID
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.error).toBe("Search query is required");
+    expect(parsed[0]).not.toHaveProperty("dateAdded");
   });
 
-  it("returns error when no results found", async () => {
+  it("returns error when no results found (with query)", async () => {
     const { mock } = createZoteroApiMock([]);
     const result = await handleToolCall(
       "search_library",
@@ -292,43 +338,17 @@ describe("search_library", () => {
     expect(parsed.error).toBe("No results found");
     expect(parsed.query).toBe("nonexistent topic");
   });
-});
 
-// ─── get_recent ─────────────────────────────────────────────────
-
-describe("get_recent", () => {
-  it("returns formatted recent items with default limit", async () => {
-    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
-    const result = await handleToolCall("get_recent", {}, mock, TEST_USER_ID);
-
-    const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].title).toBe("Deep Learning for Natural Language Processing");
-    expect(parsed[0].dateAdded).toBe("2024-02-01T10:30:00Z");
-
-    expect(getStub).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: 10 })
-    );
-  });
-
-  it("caps limit at 100", async () => {
-    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
-    await handleToolCall("get_recent", { limit: 500 }, mock, TEST_USER_ID);
-
-    expect(getStub).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: 100 })
-    );
-  });
-
-  it("returns error when no recent items found", async () => {
+  it("returns error when no items found (without query)", async () => {
     const { mock } = createZoteroApiMock([]);
-    const result = await handleToolCall("get_recent", {}, mock, TEST_USER_ID);
+    const result = await handleToolCall("search_library", {}, mock, TEST_USER_ID);
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.error).toBe("No recent items found");
+    expect(parsed.error).toBe("No items found");
     expect(parsed.suggestion).toBeDefined();
   });
 });
+
 
 // ─── create_collection ─────────────────────────────────────────
 
@@ -848,6 +868,541 @@ describe("get_user_id", () => {
 
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.user_id).toBe(TEST_USER_ID);
+  });
+});
+
+// ─── add_linked_url_attachment ──────────────────────────────────
+
+describe("add_linked_url_attachment", () => {
+  it("creates standalone attachment with minimal args (url only)", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "ATT001", title: "https://arxiv.org/abs/2301.00001" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_linked_url_attachment",
+      { url: "https://arxiv.org/abs/2301.00001" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("ATT001");
+    expect(parsed.url).toBe("https://arxiv.org/abs/2301.00001");
+    expect(parsed.parent_item).toBeNull();
+    expect(parsed.link_mode).toBe("linked_url");
+  });
+
+  it("creates child attachment with parent_item and content_type", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "ATT002", title: "Paper PDF" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_linked_url_attachment",
+      {
+        url: "https://arxiv.org/pdf/2301.00001.pdf",
+        title: "Paper PDF",
+        parent_item: "PARENT1",
+        content_type: "application/pdf",
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("ATT002");
+    expect(parsed.parent_item).toBe("PARENT1");
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("parentItem", "PARENT1");
+    expect(postedData[0]).toHaveProperty("contentType", "application/pdf");
+    expect(postedData[0]).toHaveProperty("linkMode", "linked_url");
+  });
+
+  it("uses url as title when title is not provided", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "ATT003" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_linked_url_attachment",
+      { url: "https://example.com/resource" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("title", "https://example.com/resource");
+  });
+
+  it("sets collections for standalone attachment", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "ATT004" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_linked_url_attachment",
+      { url: "https://example.com", collections: ["COL001", "COL002"] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("collections", ["COL001", "COL002"]);
+  });
+
+  it("forces collections=[] when parent_item is present", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "ATT005" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_linked_url_attachment",
+      {
+        url: "https://example.com",
+        parent_item: "PARENT1",
+        collections: ["COL001"],
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("collections", []);
+    expect(postedData[0]).toHaveProperty("parentItem", "PARENT1");
+  });
+
+  it("converts tags to Zotero format", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "ATT006" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_linked_url_attachment",
+      { url: "https://example.com", tags: ["ai", "nlp"] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("tags", [{ tag: "ai" }, { tag: "nlp" }]);
+  });
+
+  it("returns error when POST fails", async () => {
+    const writeData = {
+      isSuccess: false,
+      data: [],
+      errors: { "0": "Invalid attachment data" },
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_linked_url_attachment",
+      { url: "https://example.com" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Failed to create linked URL attachment");
+  });
+});
+
+// ─── add_web_item ───────────────────────────────────────────────
+
+describe("add_web_item", () => {
+  it("creates webpage with minimal args (url + title)", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "WEB001", title: "AI in 2024" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_web_item",
+      { url: "https://www.nature.com/articles/123", title: "AI in 2024" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("WEB001");
+    expect(parsed.title).toBe("AI in 2024");
+    expect(parsed.url).toBe("https://www.nature.com/articles/123");
+    expect(parsed.item_type).toBe("webpage");
+  });
+
+  it("sets websiteTitle and date", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "WEB002", title: "Test" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_web_item",
+      {
+        url: "https://example.com",
+        title: "Test",
+        website_title: "Nature News",
+        date: "2024-03-15",
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("websiteTitle", "Nature News");
+    expect(postedData[0]).toHaveProperty("date", "2024-03-15");
+  });
+
+  it("sets accessDate automatically", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "WEB003", title: "Test" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_web_item",
+      { url: "https://example.com", title: "Test" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("accessDate");
+    // Should be YYYY-MM-DD format
+    expect(postedData[0].accessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("adds to collection with collection_key", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "WEB004", title: "Test" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_web_item",
+      { url: "https://example.com", title: "Test", collection_key: "COL001" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("collections", ["COL001"]);
+  });
+
+  it("converts creators with creatorType author", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "WEB005", title: "Test" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_web_item",
+      {
+        url: "https://example.com",
+        title: "Test",
+        creators: [{ firstName: "John", lastName: "Smith" }],
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("creators", [
+      { firstName: "John", lastName: "Smith", creatorType: "author" },
+    ]);
+  });
+
+  it("returns error when POST fails", async () => {
+    const writeData = {
+      isSuccess: false,
+      data: [],
+      errors: { "0": "Invalid item data" },
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_web_item",
+      { url: "https://example.com", title: "Test" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Failed to create web page item");
+  });
+});
+
+// ─── import_pdf_to_zotero ───────────────────────────────────────
+
+describe("import_pdf_to_zotero", () => {
+  const ORIGINAL_ENV = process.env;
+
+  beforeEach(() => {
+    process.env = { ...ORIGINAL_ENV, ZOTERO_API_KEY: "test-api-key" };
+  });
+
+  afterEach(() => {
+    process.env = ORIGINAL_ENV;
+    vi.restoreAllMocks();
+  });
+
+  const pdfBuffer = Buffer.from("fake-pdf-content");
+
+  function mockFetchChain(overrides?: {
+    download?: Partial<Response>;
+    auth?: Record<string, unknown>;
+    upload?: Partial<Response>;
+    register?: Partial<Response>;
+  }) {
+    const fetchMock = vi.fn();
+    // 1. Download
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      arrayBuffer: () => Promise.resolve(pdfBuffer.buffer.slice(pdfBuffer.byteOffset, pdfBuffer.byteOffset + pdfBuffer.byteLength)),
+      ...overrides?.download,
+    });
+    // 2. Upload auth
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve(
+          overrides?.auth ?? {
+            url: "https://storage.zotero.org/upload",
+            contentType: "application/octet-stream",
+            prefix: "PREFIX",
+            suffix: "SUFFIX",
+            uploadKey: "UPLOAD_KEY_123",
+          }
+        ),
+    });
+    // 3. Binary upload
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      ...overrides?.upload,
+    });
+    // 4. Register
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+      ...overrides?.register,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("downloads and uploads with minimal args (url only)", async () => {
+    mockFetchChain();
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP001", title: "2301.00001.pdf" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://arxiv.org/pdf/2301.00001.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("IMP001");
+    expect(parsed.filename).toBe("2301.00001.pdf");
+    expect(parsed.link_mode).toBe("imported_url");
+    expect(parsed.size_bytes).toBe(pdfBuffer.length);
+    expect(parsed.parent_item).toBeNull();
+  });
+
+  it("creates child attachment with parent_item", async () => {
+    mockFetchChain();
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP002", title: "paper.pdf" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "import_pdf_to_zotero",
+      {
+        url: "https://example.com/paper.pdf",
+        parent_item: "PARENT1",
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("parentItem", "PARENT1");
+    expect(postedData[0]).toHaveProperty("collections", []);
+    expect(postedData[0]).toHaveProperty("linkMode", "imported_url");
+  });
+
+  it("extracts filename from URL when not provided", async () => {
+    mockFetchChain();
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP003", title: "my-paper.pdf" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://example.com/files/my-paper.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.filename).toBe("my-paper.pdf");
+  });
+
+  it("forces collections=[] when parent_item is present", async () => {
+    mockFetchChain();
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP004", title: "paper.pdf" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "import_pdf_to_zotero",
+      {
+        url: "https://example.com/paper.pdf",
+        parent_item: "PARENT1",
+        collections: ["COL001"],
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("collections", []);
+    expect(postedData[0]).toHaveProperty("parentItem", "PARENT1");
+  });
+
+  it("returns error when download fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+      })
+    );
+
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://example.com/forbidden.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Failed to download file from URL");
+    expect(parsed.status).toBe(403);
+  });
+
+  it("returns error when file exceeds 100 MB", async () => {
+    const hugeBuffer = Buffer.alloc(101 * 1024 * 1024);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        arrayBuffer: () => Promise.resolve(hugeBuffer.buffer.slice(hugeBuffer.byteOffset, hugeBuffer.byteOffset + hugeBuffer.byteLength)),
+      })
+    );
+
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://example.com/huge.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("File exceeds 100 MB limit");
+    expect(parsed.size_bytes).toBeGreaterThan(100 * 1024 * 1024);
+  });
+
+  it("skips binary upload when file already exists", async () => {
+    const fetchMock = mockFetchChain({ auth: { exists: 1 } });
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP005", title: "paper.pdf" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://example.com/paper.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("IMP005");
+    // Only 2 fetch calls: download + auth (no binary upload or register)
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns error when upload authorization fails", async () => {
+    const fetchMock = vi.fn();
+    // Download OK
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      arrayBuffer: () => Promise.resolve(pdfBuffer.buffer.slice(pdfBuffer.byteOffset, pdfBuffer.byteOffset + pdfBuffer.byteLength)),
+    });
+    // Auth fails
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP006", title: "paper.pdf" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://example.com/paper.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Upload authorization failed");
+    expect(parsed.status).toBe(403);
   });
 });
 

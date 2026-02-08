@@ -4,12 +4,14 @@ import { handleGetCollections, toolConfig as collectionsConfig } from "./get-col
 import { handleGetCollectionItems, toolConfig as collectionItemsConfig } from "./get-collection-items.js";
 import { handleGetItemsDetails, toolConfig as itemsDetailsConfig } from "./get-items-details.js";
 import { handleSearchLibrary, toolConfig as searchConfig } from "./search-library.js";
-import { handleGetRecent, toolConfig as recentConfig } from "./get-recent.js";
 import { handleCreateCollection, toolConfig as createCollectionConfig } from "./create-collection.js";
 import { handleAddItemsByDoi, toolConfig as addItemsByDoiConfig } from "./add-items-by-doi.js";
 import { handleInjectCitations, toolConfig as injectCitationsConfig } from "./inject-citations.js";
 import { handleGetItemFulltext, toolConfig as getItemFulltextConfig } from "./get-item-fulltext.js";
 import { handleGetUserId, toolConfig as getUserIdConfig } from "./get-user-id.js";
+import { handleAddLinkedUrlAttachment, toolConfig as addLinkedUrlAttachmentConfig } from "./add-linked-url-attachment.js";
+import { handleAddWebItem, toolConfig as addWebItemConfig } from "./add-web-item.js";
+import { handleImportPdfToZotero, toolConfig as importPdfToZoteroConfig } from "./import-pdf-to-zotero.js";
 
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
@@ -24,12 +26,14 @@ const handlers: Record<string, ToolHandler> = {
   get_collection_items: handleGetCollectionItems,
   get_items_details: handleGetItemsDetails,
   search_library: handleSearchLibrary,
-  get_recent: handleGetRecent,
   create_collection: handleCreateCollection,
   add_items_by_doi: handleAddItemsByDoi,
   inject_citations: handleInjectCitations,
   get_item_fulltext: handleGetItemFulltext,
   get_user_id: handleGetUserId,
+  add_linked_url_attachment: handleAddLinkedUrlAttachment,
+  add_web_item: handleAddWebItem,
+  import_pdf_to_zotero: handleImportPdfToZotero,
 };
 
 export async function handleToolCall(
@@ -50,12 +54,14 @@ const toolConfigs = [
   { config: collectionItemsConfig, handler: handleGetCollectionItems },
   { config: itemsDetailsConfig, handler: handleGetItemsDetails },
   { config: searchConfig, handler: handleSearchLibrary },
-  { config: recentConfig, handler: handleGetRecent },
   { config: createCollectionConfig, handler: handleCreateCollection },
   { config: addItemsByDoiConfig, handler: handleAddItemsByDoi },
   { config: injectCitationsConfig, handler: handleInjectCitations },
   { config: getItemFulltextConfig, handler: handleGetItemFulltext },
   { config: getUserIdConfig, handler: handleGetUserId },
+  { config: addLinkedUrlAttachmentConfig, handler: handleAddLinkedUrlAttachment },
+  { config: addWebItemConfig, handler: handleAddWebItem },
+  { config: importPdfToZoteroConfig, handler: handleImportPdfToZotero },
 ];
 
 export function registerAllTools(

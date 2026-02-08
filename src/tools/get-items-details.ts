@@ -12,7 +12,7 @@ export const toolConfig = {
     item_keys: z
       .array(z.string())
       .describe(
-        'Array of Zotero item keys (e.g. ["EUHUT5K3", "F9UQM7N2"]). Get these from search_library, add_items_by_doi, get_collection_items, or get_recent.'
+        'Array of Zotero item keys (e.g. ["EUHUT5K3", "F9UQM7N2"]). Get these from search_library, add_items_by_doi, or get_collection_items.'
       ),
   },
 } as const;
