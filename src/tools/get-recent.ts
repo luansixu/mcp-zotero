@@ -6,7 +6,7 @@ import { logger } from "../utils/logger.js";
 
 export const toolConfig = {
   name: "get_recent",
-  description: "Get recently added papers to your library",
+  description: "Get the most recently added items in your Zotero library, sorted by date added. Returns item keys, titles, and basic metadata. Useful for finding papers you just imported.",
   inputSchema: {
     limit: z.number().optional().default(10).describe("Number of papers to return (default 10)"),
   },

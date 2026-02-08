@@ -7,8 +7,11 @@ import { logger } from "../utils/logger.js";
 
 export const toolConfig = {
   name: "add_items_by_doi",
-  description:
-    "Add papers to your Zotero library by resolving DOIs. For each DOI, resolves metadata via content negotiation and creates the item in Zotero. Returns a list of successfully added items (with item_key and title) and any failures. Use the returned item_key values with inject_citations.",
+  description: `Add papers to your Zotero library by resolving DOIs. For each DOI, resolves metadata via content negotiation and creates the item in Zotero. Returns a list of successfully added items (with item_key and title) and any failures. Use the returned item_key values with inject_citations.
+
+WORKFLOW TIP:
+After adding items, use get_items_details to collect metadata for all returned item_keys in a single batch call.
+If the inject-citations skill is available, Claude can inject citations directly in the sandbox without needing the inject_citations tool.`,
   inputSchema: {
     dois: z
       .array(z.string())

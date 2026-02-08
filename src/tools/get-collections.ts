@@ -4,7 +4,7 @@ import { logger } from "../utils/logger.js";
 
 export const toolConfig = {
   name: "get_collections",
-  description: "List all collections in your Zotero library",
+  description: "List all collections (folders) in your Zotero library. Returns collection keys, names, and parent relationships. Use collection keys with get_collection_items or as parent_collection in create_collection.",
   inputSchema: {},
 } as const;
 

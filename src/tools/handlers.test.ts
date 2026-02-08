@@ -16,6 +16,7 @@ vi.mock("../citation-injector/injector.js", () => ({
   injectCitations: vi.fn(),
 }));
 
+
 const TEST_USER_ID = "12345";
 
 // ─── formatErrorResponse ────────────────────────────────────────
@@ -133,69 +134,80 @@ describe("get_collection_items", () => {
   });
 });
 
-// ─── get_item_details ───────────────────────────────────────────
+// ─── get_items_details ──────────────────────────────────────────
 
-describe("get_item_details", () => {
-  it("returns formatted item details", async () => {
-    const { mock } = createZoteroApiMock(fullItemFixture);
+describe("get_items_details", () => {
+  it("returns metadata map for multiple items", async () => {
+    const { mock } = createZoteroApiMock([fullItemFixture, minimalItemFixture]);
     const result = await handleToolCall(
-      "get_item_details",
-      { itemKey: "ABC12345" },
+      "get_items_details",
+      { item_keys: ["ABC12345", "MIN00001"] },
       mock,
       TEST_USER_ID
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.title).toBe("Deep Learning for Natural Language Processing");
-    expect(parsed.authors).toBe("John Smith, Jane Doe");
-    expect(parsed.doi).toBe("10.1234/example.2024.001");
-    expect(parsed.url).toBe("https://example.com/paper");
-    expect(parsed.publicationTitle).toBe("Journal of Machine Learning");
-    expect(parsed.tags).toEqual(["deep-learning", "NLP"]);
-    expect(parsed.collections).toEqual(["COL001", "COL002"]);
+    expect(parsed["ABC12345"].title).toBe("Deep Learning for Natural Language Processing");
+    expect(parsed["ABC12345"].authors).toBe("John Smith, Jane Doe");
+    expect(parsed["ABC12345"].doi).toBe("10.1234/example.2024.001");
+    expect(parsed["ABC12345"].itemType).toBe("journalArticle");
+    expect(parsed["ABC12345"].publicationTitle).toBe("Journal of Machine Learning");
+    expect(parsed["ABC12345"].url).toBe("https://example.com/paper");
+    expect(parsed["MIN00001"].title).toBe("Untitled");
+    expect(parsed["MIN00001"].authors).toBe("No authors listed");
+    expect(parsed["MIN00001"].doi).toBeNull();
   });
 
-  it("uses fallback values for missing fields", async () => {
-    const { mock } = createZoteroApiMock(minimalItemFixture);
-    const result = await handleToolCall(
-      "get_item_details",
-      { itemKey: "MIN00001" },
+  it("passes itemKey query param to API", async () => {
+    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
+    await handleToolCall(
+      "get_items_details",
+      { item_keys: ["ABC12345", "DEF67890"] },
       mock,
       TEST_USER_ID
     );
 
-    const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.title).toBe("Untitled");
-    expect(parsed.authors).toBe("No authors listed");
-    expect(parsed.doi).toBe("No DOI");
-    expect(parsed.url).toBe("No URL");
-    expect(parsed.publicationTitle).toBe("No publication title");
+    expect(getStub).toHaveBeenCalledWith({ itemKey: "ABC12345,DEF67890" });
   });
 
-  it("returns error for empty itemKey", async () => {
-    const { mock } = createZoteroApiMock(null);
+  it("excludes abstract from response", async () => {
+    const { mock } = createZoteroApiMock([fullItemFixture]);
     const result = await handleToolCall(
-      "get_item_details",
-      { itemKey: "  " },
+      "get_items_details",
+      { item_keys: ["ABC12345"] },
       mock,
       TEST_USER_ID
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.error).toBe("Item key is required");
+    expect(parsed["ABC12345"]).not.toHaveProperty("abstract");
+    expect(parsed["ABC12345"]).not.toHaveProperty("abstractNote");
   });
 
-  it("returns error when item is null", async () => {
-    const { mock } = createZoteroApiMock(null);
+  it("returns error for empty item_keys array", async () => {
+    const { mock } = createZoteroApiMock([]);
     const result = await handleToolCall(
-      "get_item_details",
-      { itemKey: "NONEXIST" },
+      "get_items_details",
+      { item_keys: [] },
       mock,
       TEST_USER_ID
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.error).toBe("Item not found or inaccessible");
+    expect(parsed.error).toBe("At least one item key is required");
+  });
+
+  it("returns error when no items found", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "get_items_details",
+      { item_keys: ["NONEXIST"] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("No items found for the given keys");
   });
 });
 
@@ -557,6 +569,18 @@ describe("inject_citations", () => {
     expect(parsed.output_path).toBe("/tmp/doc_cited.docx");
     expect(parsed.citations_found).toBe(3);
     expect(parsed.citations_injected).toBe(3);
+  });
+});
+
+// ─── get_user_id ────────────────────────────────────────────────
+
+describe("get_user_id", () => {
+  it("returns the configured user ID", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall("get_user_id", {}, mock, TEST_USER_ID);
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.user_id).toBe(TEST_USER_ID);
   });
 });
 

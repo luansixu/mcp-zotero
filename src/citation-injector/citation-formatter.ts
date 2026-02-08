@@ -2,10 +2,11 @@ import { CslItemData } from "../types/csl-types.js";
 
 export function formatCitationText(
   items: CslItemData[],
-  style: string
+  style: string,
+  num?: string
 ): string {
   if (style === "ieee" || style === "vancouver") {
-    return "[?]";
+    return num ? `[${num}]` : "[?]";
   }
 
   const parts = items.map((item) => {

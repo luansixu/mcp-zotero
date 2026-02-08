@@ -248,6 +248,33 @@ describe("injectCitations", () => {
     expect(writtenXml).toMatch(/ZOTERO_BIBL.*<\/w:body>/s);
   });
 
+  it("handles tag with num attribute for numeric styles", async () => {
+    const xml = [
+      "<w:body>",
+      '<w:p><w:r><w:t>&lt;zcite keys=&quot;ABC001&quot; num=&quot;1&quot;/&gt;</w:t></w:r></w:p>',
+      "</w:body>",
+    ].join("");
+
+    const zipMock = await setupJsZipMock(xml);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
+    const api = createMockZoteroApi(getStub);
+
+    const result = await injectCitations(
+      "/tmp/test.docx",
+      api,
+      TEST_USER_ID,
+      "ieee"
+    );
+
+    expect(result.injected).toBe(1);
+
+    const writeCall = zipMock.file.mock.calls.find(
+      (c: unknown[]) => c[0] === "word/document.xml" && c.length === 2
+    );
+    const writtenXml = writeCall![1] as string;
+    expect(writtenXml).toContain("[1]");
+  });
+
   it("throws on invalid docx (no word/document.xml)", async () => {
     const JSZip = (await import("jszip")).default;
     vi.mocked(JSZip.loadAsync).mockResolvedValueOnce({

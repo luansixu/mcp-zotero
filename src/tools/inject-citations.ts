@@ -21,9 +21,18 @@ Supported tag variations:
   - With page locator: <zcite keys="ABC12345" locator="pp. 12-15"/>
   - With prefix: <zcite keys="ABC12345" prefix="see "/>
   - With suffix: <zcite keys="ABC12345" suffix=", emphasis added"/>
+  - With citation number (IEEE/Vancouver): <zcite keys="ABC12345" num="1"/>
 
 OUTPUT:
-A new .docx file (original filename with _cited suffix) where each <zcite> tag is replaced with a Zotero field code, and a ZOTERO_BIBL bibliography field code is appended at the end. Opening the file in Word with the Zotero plugin installed will show live, manageable citations.`,
+A new .docx file (original filename with _cited suffix) where each <zcite> tag is replaced with a Zotero field code, and a ZOTERO_BIBL bibliography field code is appended at the end. Opening the file in Word with the Zotero plugin installed will show live, manageable citations.
+
+FALLBACK NOTE:
+If the inject-citations skill is available, prefer the skill workflow (runs in sandbox, no filesystem dependency).
+If the skill is not available, this tool serves as fallback. The recommended workflow without the skill is:
+1. Generate the .docx with <zcite> tags
+2. Have the user download the file
+3. Ask the user for the file path on their PC
+4. Call this tool with the file path`,
   inputSchema: {
     file_path: z
       .string()

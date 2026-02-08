@@ -70,4 +70,22 @@ describe("formatCitationText", () => {
     const noAuthorDate: CslItemData = { type: "article-journal" };
     expect(formatCitationText([noAuthorDate], "apa")).toBe("(Unknown, n.d.)");
   });
+
+  it('IEEE with num="1" → [1]', () => {
+    expect(formatCitationText([singleAuthor], "ieee", "1")).toBe("[1]");
+  });
+
+  it('Vancouver with num="3" → [3]', () => {
+    expect(formatCitationText([singleAuthor], "vancouver", "3")).toBe("[3]");
+  });
+
+  it("IEEE without num → [?]", () => {
+    expect(formatCitationText([singleAuthor], "ieee")).toBe("[?]");
+  });
+
+  it("APA with num → ignores num, returns author-year", () => {
+    expect(formatCitationText([singleAuthor], "apa", "1")).toBe(
+      "(Smith, 2023)"
+    );
+  });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import { toolConfig as collectionItemsConfig } from "../tools/get-collection-items.js";
-import { toolConfig as itemDetailsConfig } from "../tools/get-item-details.js";
+import { toolConfig as itemsDetailsConfig } from "../tools/get-items-details.js";
 import { toolConfig as searchConfig } from "../tools/search-library.js";
 import { toolConfig as recentConfig } from "../tools/get-recent.js";
 import { toolConfig as createCollectionConfig } from "../tools/create-collection.js";
@@ -9,7 +9,7 @@ import { toolConfig as addItemsByDoiConfig } from "../tools/add-items-by-doi.js"
 import { toolConfig as injectCitationsConfig } from "../tools/inject-citations.js";
 
 const GetCollectionItemsSchema = z.object(collectionItemsConfig.inputSchema);
-const GetItemDetailsSchema = z.object(itemDetailsConfig.inputSchema);
+const GetItemsDetailsSchema = z.object(itemsDetailsConfig.inputSchema);
 const SearchLibrarySchema = z.object(searchConfig.inputSchema);
 const GetRecentSchema = z.object(recentConfig.inputSchema);
 const CreateCollectionSchema = z.object(createCollectionConfig.inputSchema);
@@ -31,18 +31,23 @@ describe("GetCollectionItemsSchema", () => {
   });
 });
 
-describe("GetItemDetailsSchema", () => {
-  it("accepts valid itemKey", () => {
-    const result = GetItemDetailsSchema.parse({ itemKey: "ITEM001" });
-    expect(result.itemKey).toBe("ITEM001");
+describe("GetItemsDetailsSchema", () => {
+  it("accepts valid item_keys array", () => {
+    const result = GetItemsDetailsSchema.parse({ item_keys: ["ITEM001", "ITEM002"] });
+    expect(result.item_keys).toEqual(["ITEM001", "ITEM002"]);
   });
 
-  it("rejects missing itemKey", () => {
-    expect(() => GetItemDetailsSchema.parse({})).toThrow();
+  it("accepts single item key", () => {
+    const result = GetItemsDetailsSchema.parse({ item_keys: ["ITEM001"] });
+    expect(result.item_keys).toHaveLength(1);
   });
 
-  it("rejects non-string itemKey", () => {
-    expect(() => GetItemDetailsSchema.parse({ itemKey: 42 })).toThrow();
+  it("rejects missing item_keys", () => {
+    expect(() => GetItemsDetailsSchema.parse({})).toThrow();
+  });
+
+  it("rejects non-array item_keys", () => {
+    expect(() => GetItemsDetailsSchema.parse({ item_keys: "ITEM001" })).toThrow();
   });
 });
 

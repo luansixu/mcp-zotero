@@ -6,7 +6,7 @@ import { logger } from "../utils/logger.js";
 export const toolConfig = {
   name: "create_collection",
   description:
-    "Create a new collection in your Zotero library. Returns the collection key and name.",
+    "Create a new collection (folder) in your Zotero library. Optionally nest it under a parent collection. Returns the new collection key and name. Use the key with add_items_by_doi to organize imported papers.",
   inputSchema: {
     name: z.string().describe("Name of the new collection"),
     parent_collection: z

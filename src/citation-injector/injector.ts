@@ -19,12 +19,13 @@ interface ZciteMatch {
   locator?: string;
   prefix?: string;
   suffix?: string;
+  num?: string;
 }
 
 function parseZciteMatches(documentXml: string): ZciteMatch[] {
   // Attributes can appear in any order after keys
   const zciteRegex =
-    /&lt;zcite\s+keys=&quot;([^&]*)&quot;(?:\s+locator=&quot;([^&]*)&quot;)?(?:\s+prefix=&quot;([^&]*)&quot;)?(?:\s+suffix=&quot;([^&]*)&quot;)?\s*\/&gt;/g;
+    /&lt;zcite\s+keys=&quot;([^&]*)&quot;(?:\s+locator=&quot;([^&]*)&quot;)?(?:\s+prefix=&quot;([^&]*)&quot;)?(?:\s+suffix=&quot;([^&]*)&quot;)?(?:\s+num=&quot;([^&]*)&quot;)?\s*\/&gt;/g;
 
   const matches: ZciteMatch[] = [];
   let match: RegExpExecArray | null;
@@ -36,6 +37,7 @@ function parseZciteMatches(documentXml: string): ZciteMatch[] {
       locator: match[2] || undefined,
       prefix: match[3] || undefined,
       suffix: match[4] || undefined,
+      num: match[5] || undefined,
     });
   }
 
@@ -161,7 +163,7 @@ export async function injectCitations(
     const itemDataList = match.keys.map(
       (k) => cslData.get(k) ?? { type: "article-journal" }
     );
-    const formattedText = formatCitationText(itemDataList, style);
+    const formattedText = formatCitationText(itemDataList, style, match.num);
     const fieldCodeXml = generateZoteroFieldCode(citationItems, formattedText);
 
     const newXml = replaceZciteInXml(documentXml, match.fullMatch, fieldCodeXml);

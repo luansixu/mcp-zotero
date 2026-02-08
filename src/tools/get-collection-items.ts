@@ -6,7 +6,7 @@ import { logger } from "../utils/logger.js";
 
 export const toolConfig = {
   name: "get_collection_items",
-  description: "Get all items in a specific collection",
+  description: "Get all items in a specific Zotero collection. Returns item keys, titles, authors, and dates. Use the collectionKey from get_collections.",
   inputSchema: {
     collectionKey: z.string().describe("The collection key/ID"),
   },
