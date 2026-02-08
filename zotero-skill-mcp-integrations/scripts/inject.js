@@ -180,7 +180,12 @@ function formatCitationText(items, citationStyle, num) {
 
     let authorText;
     if (!authors || authors.length === 0) {
-      authorText = "Unknown";
+      const title = item.title;
+      authorText = title
+        ? title.length > 30
+          ? `"${title.substring(0, 30)}..."`
+          : `"${title}"`
+        : "Unknown";
     } else if (authors.length > 2) {
       authorText = `${firstAuthor} et al.`;
     } else if (authors.length === 2) {
@@ -373,6 +378,16 @@ async function main() {
       JSON.stringify({ output: outputPath, found: 0, injected: 0 })
     );
     return;
+  }
+
+  // 4b. Warn if using a numbered style but tags are missing the num attribute
+  if (style === "ieee" || style === "vancouver") {
+    const withNum = matches.filter((m) => m.num !== undefined).length;
+    if (withNum < matches.length) {
+      console.error(
+        `WARNING: Style '${style}' requires 'num' attribute on <zcite> tags. Found ${withNum}/${matches.length} tags with num.`
+      );
+    }
   }
 
   // 5. Replace each zcite tag with a field code

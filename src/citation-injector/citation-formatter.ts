@@ -17,7 +17,12 @@ export function formatCitationText(
 
     let authorText: string;
     if (!authors || authors.length === 0) {
-      authorText = "Unknown";
+      const title = item.title;
+      authorText = title
+        ? title.length > 30
+          ? `"${title.substring(0, 30)}..."`
+          : `"${title}"`
+        : "Unknown";
     } else if (authors.length > 2) {
       authorText = `${firstAuthor} et al.`;
     } else if (authors.length === 2) {

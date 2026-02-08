@@ -115,6 +115,30 @@ describe("get_collection_items", () => {
     expect(parsed.status).toBe("empty");
   });
 
+  it("passes itemType filter when excludeAttachments is true (default)", async () => {
+    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
+    await handleToolCall(
+      "get_collection_items",
+      { collectionKey: "COL001" },
+      mock,
+      TEST_USER_ID
+    );
+
+    expect(getStub).toHaveBeenCalledWith({ itemType: "-attachment || -note" });
+  });
+
+  it("does not pass itemType filter when excludeAttachments is false", async () => {
+    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
+    await handleToolCall(
+      "get_collection_items",
+      { collectionKey: "COL001", excludeAttachments: false },
+      mock,
+      TEST_USER_ID
+    );
+
+    expect(getStub).toHaveBeenCalledWith({});
+  });
+
   it("returns not_found error on 404", async () => {
     const { mock, getStub } = createZoteroApiMock([]);
     const error404 = new Error("Not found") as Error & { response?: { status: number } };
@@ -555,6 +579,7 @@ describe("inject_citations", () => {
       outputPath: "/tmp/doc_cited.docx",
       found: 3,
       injected: 3,
+      warnings: [],
     });
 
     const { mock } = createZoteroApiMock([]);

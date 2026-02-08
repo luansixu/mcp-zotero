@@ -11,6 +11,7 @@ export interface InjectionResult {
   outputPath: string;
   found: number;
   injected: number;
+  warnings: string[];
 }
 
 interface ZciteMatch {
@@ -147,7 +148,18 @@ export async function injectCitations(
     const outputPath = filePath.replace(".docx", "_cited.docx");
     const buffer = await zip.generateAsync({ type: "nodebuffer" });
     await writeFile(outputPath, buffer);
-    return { outputPath, found: 0, injected: 0 };
+    return { outputPath, found: 0, injected: 0, warnings: [] };
+  }
+
+  // Warn if using a numbered style but tags are missing the num attribute
+  const warnings: string[] = [];
+  if (style === "ieee" || style === "vancouver") {
+    const withNum = matches.filter((m) => m.num !== undefined).length;
+    if (withNum < matches.length) {
+      warnings.push(
+        `Style '${style}' requires 'num' attribute on <zcite> tags. Found ${withNum}/${matches.length} tags with num.`
+      );
+    }
   }
 
   // Collect all unique item keys
@@ -183,5 +195,5 @@ export async function injectCitations(
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
   await writeFile(outputPath, buffer);
 
-  return { outputPath, found: matches.length, injected };
+  return { outputPath, found: matches.length, injected, warnings };
 }

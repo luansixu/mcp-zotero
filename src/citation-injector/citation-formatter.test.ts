@@ -66,7 +66,29 @@ describe("formatCitationText", () => {
     expect(formatCitationText([singleAuthor], "vancouver")).toBe("[?]");
   });
 
-  it("missing author/date → (Unknown, n.d.)", () => {
+  it("missing author with title → uses abbreviated title", () => {
+    const noAuthorWithTitle: CslItemData = {
+      type: "article-journal",
+      title: "A Short Title",
+      issued: { "date-parts": [["2023"]] },
+    };
+    expect(formatCitationText([noAuthorWithTitle], "apa")).toBe(
+      '("A Short Title", 2023)'
+    );
+  });
+
+  it("missing author with long title → truncates at 30 chars", () => {
+    const longTitle: CslItemData = {
+      type: "article-journal",
+      title: "A Very Long Title That Exceeds Thirty Characters Easily",
+      issued: { "date-parts": [["2023"]] },
+    };
+    expect(formatCitationText([longTitle], "apa")).toBe(
+      '("A Very Long Title That Exceeds...", 2023)'
+    );
+  });
+
+  it("missing author and title → (Unknown, n.d.)", () => {
     const noAuthorDate: CslItemData = { type: "article-journal" };
     expect(formatCitationText([noAuthorDate], "apa")).toBe("(Unknown, n.d.)");
   });

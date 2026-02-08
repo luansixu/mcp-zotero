@@ -29,6 +29,19 @@ describe("GetCollectionItemsSchema", () => {
   it("rejects non-string collectionKey", () => {
     expect(() => GetCollectionItemsSchema.parse({ collectionKey: 123 })).toThrow();
   });
+
+  it("defaults excludeAttachments to true", () => {
+    const result = GetCollectionItemsSchema.parse({ collectionKey: "ABC123" });
+    expect(result.excludeAttachments).toBe(true);
+  });
+
+  it("accepts excludeAttachments as boolean", () => {
+    const result = GetCollectionItemsSchema.parse({
+      collectionKey: "ABC123",
+      excludeAttachments: false,
+    });
+    expect(result.excludeAttachments).toBe(false);
+  });
 });
 
 describe("GetItemsDetailsSchema", () => {

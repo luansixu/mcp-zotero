@@ -275,6 +275,73 @@ describe("injectCitations", () => {
     expect(writtenXml).toContain("[1]");
   });
 
+  it("warns when vancouver style tags are missing num attribute", async () => {
+    const xml = [
+      "<w:body>",
+      '<w:p><w:r><w:t>&lt;zcite keys=&quot;ABC001&quot;/&gt;</w:t></w:r></w:p>',
+      '<w:p><w:r><w:t>&lt;zcite keys=&quot;DEF002&quot;/&gt;</w:t></w:r></w:p>',
+      "</w:body>",
+    ].join("");
+
+    await setupJsZipMock(xml);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
+    const api = createMockZoteroApi(getStub);
+
+    const result = await injectCitations(
+      "/tmp/test.docx",
+      api,
+      TEST_USER_ID,
+      "vancouver"
+    );
+
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("vancouver");
+    expect(result.warnings[0]).toContain("0/2");
+  });
+
+  it("no warnings when all vancouver tags have num", async () => {
+    const xml = [
+      "<w:body>",
+      '<w:p><w:r><w:t>&lt;zcite keys=&quot;ABC001&quot; num=&quot;1&quot;/&gt;</w:t></w:r></w:p>',
+      '<w:p><w:r><w:t>&lt;zcite keys=&quot;DEF002&quot; num=&quot;2&quot;/&gt;</w:t></w:r></w:p>',
+      "</w:body>",
+    ].join("");
+
+    await setupJsZipMock(xml);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
+    const api = createMockZoteroApi(getStub);
+
+    const result = await injectCitations(
+      "/tmp/test.docx",
+      api,
+      TEST_USER_ID,
+      "vancouver"
+    );
+
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("no warnings for apa style regardless of num", async () => {
+    const xml = [
+      "<w:body>",
+      '<w:p><w:r><w:t>&lt;zcite keys=&quot;ABC001&quot;/&gt;</w:t></w:r></w:p>',
+      "</w:body>",
+    ].join("");
+
+    await setupJsZipMock(xml);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
+    const api = createMockZoteroApi(getStub);
+
+    const result = await injectCitations(
+      "/tmp/test.docx",
+      api,
+      TEST_USER_ID,
+      "apa"
+    );
+
+    expect(result.warnings).toHaveLength(0);
+  });
+
   it("throws on invalid docx (no word/document.xml)", async () => {
     const JSZip = (await import("jszip")).default;
     vi.mocked(JSZip.loadAsync).mockResolvedValueOnce({

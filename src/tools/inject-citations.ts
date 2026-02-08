@@ -67,19 +67,20 @@ export async function handleInjectCitations(
   try {
     const result = await injectCitations(file_path, zoteroApi, userId, style);
 
+    const responseObj: Record<string, unknown> = {
+      output_path: result.outputPath,
+      citations_found: result.found,
+      citations_injected: result.injected,
+    };
+    if (result.warnings.length > 0) {
+      responseObj.warnings = result.warnings;
+    }
+
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              output_path: result.outputPath,
-              citations_found: result.found,
-              citations_injected: result.injected,
-            },
-            null,
-            2
-          ),
+          text: JSON.stringify(responseObj, null, 2),
         },
       ],
     };

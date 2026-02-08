@@ -9,6 +9,12 @@ export const toolConfig = {
   description: "Get all items in a specific Zotero collection. Returns item keys, titles, authors, and dates. Use the collectionKey from get_collections.",
   inputSchema: {
     collectionKey: z.string().describe("The collection key/ID"),
+    excludeAttachments: z
+      .boolean()
+      .default(true)
+      .describe(
+        "Exclude attachment and note items (default: true)"
+      ),
   },
 } as const;
 
@@ -19,14 +25,17 @@ export async function handleGetCollectionItems(
   userId: string,
   args: Record<string, unknown>
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-  const { collectionKey } = CollectionItemsSchema.parse(args);
+  const { collectionKey, excludeAttachments } = CollectionItemsSchema.parse(args);
 
   try {
+    const queryParams = excludeAttachments
+      ? { itemType: "-attachment || -note" }
+      : {};
     const response = await zoteroApi
       .library("user", userId)
       .collections(collectionKey)
       .items()
-      .get();
+      .get(queryParams);
 
     const items = response.getData();
 
