@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { ZoteroApiInterface, isZoteroApiError } from "../types/zotero-types.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import { logger } from "../utils/logger.js";
+import { extractPdfText } from "../utils/pdf-text-extractor.js";
+import { putFulltext } from "../utils/zotero-fulltext.js";
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -65,7 +67,18 @@ export async function handleImportPdfToZotero(
 
   try {
     // 1. Download the file
-    const downloadResponse = await fetch(url);
+    let downloadResponse: Response;
+    try {
+      downloadResponse = await fetch(url);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return formatErrorResponse("Network error downloading file", {
+        url,
+        details: detail,
+        suggestion:
+          "The server may be blocking automated requests, the URL may redirect to an HTML page, or it may require authentication. Try a direct PDF link from another source (e.g. PubMed Central, Sci-Hub, or the publisher's direct PDF endpoint).",
+      });
+    }
     if (!downloadResponse.ok) {
       return formatErrorResponse("Failed to download file from URL", {
         url,
@@ -186,6 +199,25 @@ export async function handleImportPdfToZotero(
       }
     }
 
+    // 7. Extract text and index fulltext
+    let fulltextIndexed = false;
+    let fulltextStatus: string;
+
+    if (content_type === "application/pdf") {
+      try {
+        const { text, totalPages } = await extractPdfText(buffer);
+        const putResult = await putFulltext(userId, itemKey, apiKey, text, totalPages);
+        fulltextIndexed = putResult.success;
+        fulltextStatus = putResult.success
+          ? "Fulltext indexed successfully. Use get_item_fulltext to retrieve content."
+          : `Fulltext PUT failed: ${putResult.error}. Sync with Zotero Desktop to index the PDF.`;
+      } catch {
+        fulltextStatus = "PDF text extraction failed. Sync with Zotero Desktop to index the PDF.";
+      }
+    } else {
+      fulltextStatus = "Non-PDF content type, fulltext extraction skipped.";
+    }
+
     return {
       content: [
         {
@@ -199,6 +231,8 @@ export async function handleImportPdfToZotero(
               parent_item: parent_item ?? null,
               size_bytes: buffer.length,
               link_mode: "imported_url",
+              fulltext_indexed: fulltextIndexed,
+              fulltext_status: fulltextStatus,
             },
             null,
             2
@@ -215,7 +249,10 @@ export async function handleImportPdfToZotero(
         url: err.response?.url,
       });
     }
-    throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    return formatErrorResponse("import_pdf_to_zotero failed", {
+      details: message,
+    });
   }
 }
 

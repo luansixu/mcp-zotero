@@ -16,6 +16,13 @@ vi.mock("../citation-injector/injector.js", () => ({
   injectCitations: vi.fn(),
 }));
 
+vi.mock("../utils/pdf-text-extractor.js", () => ({
+  extractPdfText: vi.fn(),
+}));
+
+vi.mock("../utils/zotero-fulltext.js", () => ({
+  putFulltext: vi.fn(),
+}));
 
 const TEST_USER_ID = "12345";
 
@@ -1210,8 +1217,17 @@ describe("import_pdf_to_zotero", () => {
     return fetchMock;
   }
 
+  /** Set up extractPdfText + putFulltext mocks for successful fulltext indexing */
+  async function mockFulltextSuccess() {
+    const { extractPdfText } = await import("../utils/pdf-text-extractor.js");
+    const { putFulltext } = await import("../utils/zotero-fulltext.js");
+    vi.mocked(extractPdfText).mockResolvedValueOnce({ text: "Extracted PDF text", totalPages: 5 });
+    vi.mocked(putFulltext).mockResolvedValueOnce({ success: true });
+  }
+
   it("downloads and uploads with minimal args (url only)", async () => {
     mockFetchChain();
+    await mockFulltextSuccess();
 
     const writeData = {
       isSuccess: true,
@@ -1232,10 +1248,12 @@ describe("import_pdf_to_zotero", () => {
     expect(parsed.link_mode).toBe("imported_url");
     expect(parsed.size_bytes).toBe(pdfBuffer.length);
     expect(parsed.parent_item).toBeNull();
+    expect(parsed.fulltext_indexed).toBe(true);
   });
 
   it("creates child attachment with parent_item", async () => {
     mockFetchChain();
+    await mockFulltextSuccess();
 
     const writeData = {
       isSuccess: true,
@@ -1261,6 +1279,7 @@ describe("import_pdf_to_zotero", () => {
 
   it("extracts filename from URL when not provided", async () => {
     mockFetchChain();
+    await mockFulltextSuccess();
 
     const writeData = {
       isSuccess: true,
@@ -1281,6 +1300,7 @@ describe("import_pdf_to_zotero", () => {
 
   it("forces collections=[] when parent_item is present", async () => {
     mockFetchChain();
+    await mockFulltextSuccess();
 
     const writeData = {
       isSuccess: true,
@@ -1352,6 +1372,7 @@ describe("import_pdf_to_zotero", () => {
 
   it("skips binary upload when file already exists", async () => {
     const fetchMock = mockFetchChain({ auth: { exists: 1 } });
+    await mockFulltextSuccess();
 
     const writeData = {
       isSuccess: true,
@@ -1403,6 +1424,144 @@ describe("import_pdf_to_zotero", () => {
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.error).toBe("Upload authorization failed");
     expect(parsed.status).toBe(403);
+  });
+
+  it("returns descriptive error when download fetch throws (network error)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValueOnce(new TypeError("fetch failed"))
+    );
+
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://www.frontiersin.org/articles/10.3389/fmed.2022.943631/pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Network error downloading file");
+    expect(parsed.details).toBe("fetch failed");
+    expect(parsed.url).toContain("frontiersin.org");
+    expect(parsed.suggestion).toBeDefined();
+  });
+
+  it("indexes fulltext successfully after PDF upload", async () => {
+    mockFetchChain();
+
+    const { extractPdfText } = await import("../utils/pdf-text-extractor.js");
+    const { putFulltext } = await import("../utils/zotero-fulltext.js");
+    vi.mocked(extractPdfText).mockResolvedValueOnce({ text: "Paper content here", totalPages: 10 });
+    vi.mocked(putFulltext).mockResolvedValueOnce({ success: true });
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP010", title: "paper.pdf" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://example.com/paper.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.fulltext_indexed).toBe(true);
+    expect(parsed.fulltext_status).toContain("Fulltext indexed successfully");
+
+    expect(vi.mocked(extractPdfText)).toHaveBeenCalledWith(expect.any(Buffer));
+    expect(vi.mocked(putFulltext)).toHaveBeenCalledWith(
+      TEST_USER_ID,
+      "IMP010",
+      "test-api-key",
+      "Paper content here",
+      10
+    );
+  });
+
+  it("handles PDF text extraction failure gracefully", async () => {
+    mockFetchChain();
+
+    const { extractPdfText } = await import("../utils/pdf-text-extractor.js");
+    vi.mocked(extractPdfText).mockRejectedValueOnce(new Error("Corrupt PDF"));
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP011", title: "corrupt.pdf" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://example.com/corrupt.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("IMP011");
+    expect(parsed.fulltext_indexed).toBe(false);
+    expect(parsed.fulltext_status).toContain("PDF text extraction failed");
+  });
+
+  it("handles fulltext PUT failure gracefully", async () => {
+    mockFetchChain();
+
+    const { extractPdfText } = await import("../utils/pdf-text-extractor.js");
+    const { putFulltext } = await import("../utils/zotero-fulltext.js");
+    vi.mocked(extractPdfText).mockResolvedValueOnce({ text: "Some text", totalPages: 3 });
+    vi.mocked(putFulltext).mockResolvedValueOnce({
+      success: false,
+      error: "Fulltext PUT failed with status 500",
+    });
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP012", title: "paper.pdf" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://example.com/paper.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("IMP012");
+    expect(parsed.fulltext_indexed).toBe(false);
+    expect(parsed.fulltext_status).toContain("Fulltext PUT failed");
+  });
+
+  it("skips fulltext extraction for non-PDF content types", async () => {
+    mockFetchChain();
+
+    const { extractPdfText } = await import("../utils/pdf-text-extractor.js");
+    const extractMock = vi.mocked(extractPdfText);
+    extractMock.mockClear();
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "IMP013", title: "image.png" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "import_pdf_to_zotero",
+      { url: "https://example.com/image.png", content_type: "image/png", filename: "image.png" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("IMP013");
+    expect(parsed.fulltext_indexed).toBe(false);
+    expect(parsed.fulltext_status).toContain("Non-PDF content type");
+    expect(extractMock).not.toHaveBeenCalled();
   });
 });
 
