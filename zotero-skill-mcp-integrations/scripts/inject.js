@@ -7,9 +7,20 @@
 //
 // Dependencies: jszip (npm install jszip)
 
-import JSZip from "jszip";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
+
+// Resilient JSZip import: try ESM import first, then fall back to
+// createRequire from the current working directory (needed when the
+// script lives in a read-only skill directory without its own node_modules).
+let JSZip;
+try {
+  JSZip = (await import("jszip")).default;
+} catch {
+  const { createRequire } = await import("node:module");
+  const require = createRequire(process.cwd() + "/package.json");
+  JSZip = require("jszip");
+}
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -94,14 +105,16 @@ function metadataToCsl(meta) {
   if (meta.title) csl.title = meta.title;
   if (authors.length > 0) csl.author = authors;
   if (issued) csl.issued = issued;
-  if (meta.DOI) csl.DOI = meta.DOI;
-  if (meta.containerTitle) csl["container-title"] = meta.containerTitle;
+  // Accept both uppercase (Zotero-style) and lowercase (MCP response) field names
+  if (meta.DOI || meta.doi) csl.DOI = meta.DOI || meta.doi;
+  if (meta.containerTitle || meta.publicationTitle)
+    csl["container-title"] = meta.containerTitle || meta.publicationTitle;
   if (meta.volume) csl.volume = meta.volume;
   if (meta.issue) csl.issue = meta.issue;
-  if (meta.page) csl.page = meta.page;
+  if (meta.page || meta.pages) csl.page = meta.page || meta.pages;
   if (meta.publisher) csl.publisher = meta.publisher;
   if (meta.publisherPlace) csl["publisher-place"] = meta.publisherPlace;
-  if (meta.URL) csl.URL = meta.URL;
+  if (meta.URL || meta.url) csl.URL = meta.URL || meta.url;
 
   return csl;
 }
