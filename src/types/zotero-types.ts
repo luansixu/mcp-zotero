@@ -32,6 +32,7 @@ export interface ZoteroItemData {
   collections?: string[];
   notes?: ZoteroNote[];
   publicationTitle?: string;
+  contentType?: string;
   parentCollection?: string;
   numItems?: number;
   name?: string;
@@ -83,10 +84,19 @@ export interface ZoteroApiInterface {
   library(type: string, id: number | string): ZoteroApiInterface;
   collections(key?: string): ZoteroApiInterface;
   items(key?: string): ZoteroApiInterface;
+  children(): ZoteroApiInterface;
   top(): ZoteroApiInterface;
   trash(): ZoteroApiInterface;
   get(config?: Record<string, unknown>): Promise<ZoteroResponse>;
   post(data: unknown[], opts?: Record<string, unknown>): Promise<ZoteroWriteResponse>;
+}
+
+export interface ZoteroFulltextResponse {
+  content: string;
+  indexedPages?: number;
+  totalPages?: number;
+  indexedChars?: number;
+  totalChars?: number;
 }
 
 export interface ZoteroApi {

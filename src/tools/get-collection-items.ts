@@ -6,7 +6,7 @@ import { logger } from "../utils/logger.js";
 
 export const toolConfig = {
   name: "get_collection_items",
-  description: "Get all items in a specific Zotero collection. Returns item keys, titles, authors, and dates. Use the collectionKey from get_collections.",
+  description: "Get all items in a specific Zotero collection. Returns item keys, titles, authors, and dates. Use the collectionKey from get_collections. Use the returned item keys with get_items_details, get_item_fulltext, or inject_citations.",
   inputSchema: {
     collectionKey: z.string().describe("The collection key/ID"),
     excludeAttachments: z
@@ -28,16 +28,13 @@ export async function handleGetCollectionItems(
   const { collectionKey, excludeAttachments } = CollectionItemsSchema.parse(args);
 
   try {
-    const queryParams = excludeAttachments
-      ? { itemType: "-attachment || -note" }
-      : {};
     const response = await zoteroApi
       .library("user", userId)
       .collections(collectionKey)
       .items()
-      .get(queryParams);
+      .get();
 
-    const items = response.getData();
+    let items = response.getData();
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return formatErrorResponse("Collection is empty", {
@@ -45,6 +42,13 @@ export async function handleGetCollectionItems(
         suggestion: "Add some items to this collection in Zotero",
         status: "empty",
       });
+    }
+
+    if (excludeAttachments) {
+      items = items.filter(
+        (item: ZoteroItemData) =>
+          item.itemType !== "attachment" && item.itemType !== "note"
+      );
     }
 
     const formatted = items
@@ -55,7 +59,6 @@ export async function handleGetCollectionItems(
         date: item.date || "No date",
         key: item.key || "No key",
         itemType: item.itemType || "Unknown type",
-        abstractNote: item.abstractNote || "No abstract available",
         tags: formatTags(item.tags),
         doi: item.DOI || null,
         url: item.url || null,

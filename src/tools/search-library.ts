@@ -6,7 +6,7 @@ import { logger } from "../utils/logger.js";
 
 export const toolConfig = {
   name: "search_library",
-  description: "Search your entire Zotero library by title, author, abstract, or any field. Returns matching items with their keys and basic metadata. Use the returned item keys with get_item_details or inject_citations.",
+  description: "Search your entire Zotero library by title, author, or any field. Returns matching items with their keys and basic metadata. Use the returned item keys with get_items_details, get_item_fulltext, or inject_citations.",
   inputSchema: {
     query: z.string().describe("Search query"),
   },
@@ -46,7 +46,6 @@ export async function handleSearchLibrary(
       date: item.date || "No date",
       key: item.key,
       itemType: item.itemType,
-      abstractNote: item.abstractNote || "No abstract available",
     }));
 
     return {

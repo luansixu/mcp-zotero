@@ -7,6 +7,7 @@ import { toolConfig as recentConfig } from "../tools/get-recent.js";
 import { toolConfig as createCollectionConfig } from "../tools/create-collection.js";
 import { toolConfig as addItemsByDoiConfig } from "../tools/add-items-by-doi.js";
 import { toolConfig as injectCitationsConfig } from "../tools/inject-citations.js";
+import { toolConfig as getItemFulltextConfig } from "../tools/get-item-fulltext.js";
 
 const GetCollectionItemsSchema = z.object(collectionItemsConfig.inputSchema);
 const GetItemsDetailsSchema = z.object(itemsDetailsConfig.inputSchema);
@@ -15,6 +16,7 @@ const GetRecentSchema = z.object(recentConfig.inputSchema);
 const CreateCollectionSchema = z.object(createCollectionConfig.inputSchema);
 const AddItemsByDoiSchema = z.object(addItemsByDoiConfig.inputSchema);
 const InjectCitationsSchema = z.object(injectCitationsConfig.inputSchema);
+const GetItemFulltextSchema = z.object(getItemFulltextConfig.inputSchema);
 
 describe("GetCollectionItemsSchema", () => {
   it("accepts valid collectionKey", () => {
@@ -169,5 +171,21 @@ describe("InjectCitationsSchema", () => {
         style: "invalid",
       })
     ).toThrow();
+  });
+});
+
+describe("GetItemFulltextSchema", () => {
+  it("accepts valid item_key", () => {
+    const result = GetItemFulltextSchema.parse({ item_key: "ABC12345" });
+    expect(result.item_key).toBe("ABC12345");
+  });
+
+  it("rejects missing item_key", () => {
+    expect(() => GetItemFulltextSchema.parse({})).toThrow();
+  });
+
+  it("defaults max_characters to 50000", () => {
+    const result = GetItemFulltextSchema.parse({ item_key: "ABC12345" });
+    expect(result.max_characters).toBe(50000);
   });
 });

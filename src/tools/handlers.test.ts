@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { handleToolCall } from "./index.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import {
@@ -96,7 +96,6 @@ describe("get_collection_items", () => {
     expect(parsed[0].title).toBe("Untitled");
     expect(parsed[0].authors).toBe("No authors listed");
     expect(parsed[0].date).toBe("No date");
-    expect(parsed[0].abstractNote).toBe("No abstract available");
     expect(parsed[0].doi).toBeNull();
     expect(parsed[0].tags).toEqual([]);
   });
@@ -115,28 +114,34 @@ describe("get_collection_items", () => {
     expect(parsed.status).toBe("empty");
   });
 
-  it("passes itemType filter when excludeAttachments is true (default)", async () => {
-    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
-    await handleToolCall(
+  it("filters out attachments and notes client-side when excludeAttachments is true", async () => {
+    const attachmentItem = { key: "ATT001", itemType: "attachment", title: "PDF" };
+    const noteItem = { key: "NOTE01", itemType: "note", title: "My note" };
+    const { mock } = createZoteroApiMock([fullItemFixture, attachmentItem, noteItem]);
+    const result = await handleToolCall(
       "get_collection_items",
       { collectionKey: "COL001" },
       mock,
       TEST_USER_ID
     );
 
-    expect(getStub).toHaveBeenCalledWith({ itemType: "-attachment || -note" });
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].key).toBe("ABC12345");
   });
 
-  it("does not pass itemType filter when excludeAttachments is false", async () => {
-    const { mock, getStub } = createZoteroApiMock([fullItemFixture]);
-    await handleToolCall(
+  it("includes attachments and notes when excludeAttachments is false", async () => {
+    const attachmentItem = { key: "ATT001", itemType: "attachment", title: "PDF" };
+    const { mock } = createZoteroApiMock([fullItemFixture, attachmentItem]);
+    const result = await handleToolCall(
       "get_collection_items",
       { collectionKey: "COL001", excludeAttachments: false },
       mock,
       TEST_USER_ID
     );
 
-    expect(getStub).toHaveBeenCalledWith({});
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveLength(2);
   });
 
   it("returns not_found error on 404", async () => {
@@ -545,6 +550,243 @@ describe("add_items_by_doi", () => {
     const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
     expect(postedData[0]).toHaveProperty("collections", ["COL001"]);
     expect(postedData[0]).toHaveProperty("tags", [{ tag: "ai" }]);
+  });
+});
+
+// ─── get_item_fulltext ─────────────────────────────────────────
+
+describe("get_item_fulltext", () => {
+  const ORIGINAL_ENV = process.env;
+
+  beforeEach(() => {
+    process.env = { ...ORIGINAL_ENV, ZOTERO_API_KEY: "test-api-key" };
+  });
+
+  afterEach(() => {
+    process.env = ORIGINAL_ENV;
+    vi.restoreAllMocks();
+  });
+
+  it("returns fulltext successfully", async () => {
+    const parentItem = { ...fullItemFixture, itemType: "journalArticle" };
+    const pdfChild = {
+      key: "ATTACH01",
+      itemType: "attachment",
+      contentType: "application/pdf",
+      title: "Full Text PDF",
+    };
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    // First call: parent item metadata
+    getStub.mockResolvedValueOnce({ getData: () => parentItem });
+    // Second call: children
+    getStub.mockResolvedValueOnce({ getData: () => [pdfChild] });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            content: "This is the full text of the paper.",
+            indexedPages: 10,
+            totalPages: 10,
+          }),
+      })
+    );
+
+    const result = await handleToolCall(
+      "get_item_fulltext",
+      { item_key: "ABC12345" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("ABC12345");
+    expect(parsed.attachment_key).toBe("ATTACH01");
+    expect(parsed.text).toBe("This is the full text of the paper.");
+    expect(parsed.truncated).toBe(false);
+    expect(parsed.pages).toBe(10);
+  });
+
+  it("returns error when fulltext not indexed (404)", async () => {
+    const parentItem = { ...fullItemFixture, itemType: "journalArticle" };
+    const pdfChild = {
+      key: "ATTACH01",
+      itemType: "attachment",
+      contentType: "application/pdf",
+    };
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub.mockResolvedValueOnce({ getData: () => parentItem });
+    getStub.mockResolvedValueOnce({ getData: () => [pdfChild] });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: false, status: 404 })
+    );
+
+    const result = await handleToolCall(
+      "get_item_fulltext",
+      { item_key: "ABC12345" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("Full text not indexed");
+  });
+
+  it("returns error when no PDF attachment found", async () => {
+    const parentItem = { ...fullItemFixture, itemType: "journalArticle", url: undefined };
+    const noteChild = { key: "NOTE01", itemType: "note", title: "My notes" };
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub.mockResolvedValueOnce({ getData: () => ({ ...parentItem, url: undefined }) });
+    getStub.mockResolvedValueOnce({ getData: () => [noteChild] });
+
+    const result = await handleToolCall(
+      "get_item_fulltext",
+      { item_key: "ABC12345" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("No PDF attachment found");
+  });
+
+  it("returns URL suggestion for items with URL but no PDF", async () => {
+    const parentItem = {
+      ...fullItemFixture,
+      itemType: "journalArticle",
+      url: "https://example.com/paper",
+    };
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub.mockResolvedValueOnce({ getData: () => parentItem });
+    getStub.mockResolvedValueOnce({ getData: () => [] });
+
+    const result = await handleToolCall(
+      "get_item_fulltext",
+      { item_key: "ABC12345" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("URL");
+    expect(parsed.url).toBe("https://example.com/paper");
+  });
+
+  it("returns URL suggestion for webpage itemType", async () => {
+    const webpageItem = {
+      key: "WEB001",
+      itemType: "webpage",
+      title: "Some Blog Post",
+      url: "https://example.com/blog",
+    };
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub.mockResolvedValueOnce({ getData: () => webpageItem });
+    getStub.mockResolvedValueOnce({ getData: () => [] });
+
+    const result = await handleToolCall(
+      "get_item_fulltext",
+      { item_key: "WEB001" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("web page");
+  });
+
+  it("handles direct attachment key", async () => {
+    const attachmentItem = {
+      key: "ATTACH01",
+      itemType: "attachment",
+      contentType: "application/pdf",
+      title: "Full Text PDF",
+    };
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub.mockResolvedValueOnce({ getData: () => attachmentItem });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ content: "Direct attachment text." }),
+      })
+    );
+
+    const result = await handleToolCall(
+      "get_item_fulltext",
+      { item_key: "ATTACH01" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.item_key).toBe("ATTACH01");
+    expect(parsed.attachment_key).toBe("ATTACH01");
+    expect(parsed.text).toBe("Direct attachment text.");
+  });
+
+  it("truncates text when exceeding max_characters", async () => {
+    const parentItem = { ...fullItemFixture, itemType: "journalArticle" };
+    const pdfChild = {
+      key: "ATTACH01",
+      itemType: "attachment",
+      contentType: "application/pdf",
+    };
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub.mockResolvedValueOnce({ getData: () => parentItem });
+    getStub.mockResolvedValueOnce({ getData: () => [pdfChild] });
+
+    const longText = "A".repeat(200);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ content: longText }),
+      })
+    );
+
+    const result = await handleToolCall(
+      "get_item_fulltext",
+      { item_key: "ABC12345", max_characters: 100 },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.characters).toBe(100);
+    expect(parsed.text).toHaveLength(100);
+  });
+
+  it("returns error for non-existent item (404)", async () => {
+    const { mock, getStub } = createZoteroApiMock([]);
+    const error404 = new Error("Not found") as Error & { response?: { status: number } };
+    error404.response = { status: 404 };
+    getStub.mockRejectedValueOnce(error404);
+
+    const result = await handleToolCall(
+      "get_item_fulltext",
+      { item_key: "NONEXIST" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Item not found");
   });
 });
 

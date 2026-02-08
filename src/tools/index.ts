@@ -8,6 +8,7 @@ import { handleGetRecent, toolConfig as recentConfig } from "./get-recent.js";
 import { handleCreateCollection, toolConfig as createCollectionConfig } from "./create-collection.js";
 import { handleAddItemsByDoi, toolConfig as addItemsByDoiConfig } from "./add-items-by-doi.js";
 import { handleInjectCitations, toolConfig as injectCitationsConfig } from "./inject-citations.js";
+import { handleGetItemFulltext, toolConfig as getItemFulltextConfig } from "./get-item-fulltext.js";
 import { handleGetUserId, toolConfig as getUserIdConfig } from "./get-user-id.js";
 
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -27,6 +28,7 @@ const handlers: Record<string, ToolHandler> = {
   create_collection: handleCreateCollection,
   add_items_by_doi: handleAddItemsByDoi,
   inject_citations: handleInjectCitations,
+  get_item_fulltext: handleGetItemFulltext,
   get_user_id: handleGetUserId,
 };
 
@@ -52,6 +54,7 @@ const toolConfigs = [
   { config: createCollectionConfig, handler: handleCreateCollection },
   { config: addItemsByDoiConfig, handler: handleAddItemsByDoi },
   { config: injectCitationsConfig, handler: handleInjectCitations },
+  { config: getItemFulltextConfig, handler: handleGetItemFulltext },
   { config: getUserIdConfig, handler: handleGetUserId },
 ];
 
