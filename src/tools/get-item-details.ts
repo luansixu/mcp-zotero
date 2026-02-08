@@ -1,14 +1,25 @@
-import { ZoteroApiInterface } from "../types/zotero-types.js";
-import { GetItemDetailsSchema } from "../schemas/index.js";
+import { z } from "zod";
+import { ZoteroApiInterface, ZoteroItemData, isZoteroApiError } from "../types/zotero-types.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import { formatCreators, formatTags } from "../utils/item-formatter.js";
+import { logger } from "../utils/logger.js";
+
+export const toolConfig = {
+  name: "get_item_details",
+  description: "Get detailed information about a specific paper",
+  inputSchema: {
+    itemKey: z.string().describe("The paper's item key/ID"),
+  },
+} as const;
+
+const ItemDetailsSchema = z.object(toolConfig.inputSchema);
 
 export async function handleGetItemDetails(
   zoteroApi: ZoteroApiInterface,
   userId: string,
   args: Record<string, unknown>
-): Promise<{ content: Array<{ type: string; text: string }> }> {
-  const { itemKey } = GetItemDetailsSchema.parse(args);
+): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const { itemKey } = ItemDetailsSchema.parse(args);
   if (!itemKey?.trim()) {
     return formatErrorResponse("Item key is required");
   }
@@ -19,11 +30,7 @@ export async function handleGetItemDetails(
       .items(itemKey)
       .get();
 
-    const item = response.getData();
-    console.error(
-      `[DEBUG] GET_ITEM_DETAILS: Raw response:`,
-      JSON.stringify(item, null, 2)
-    );
+    const item = response.getData() as ZoteroItemData;
 
     if (!item) {
       return formatErrorResponse(
@@ -55,19 +62,14 @@ export async function handleGetItemDetails(
       ],
     };
   } catch (err) {
-    const error = err as {
-      response?: {
-        status: number;
-        url?: string;
-      };
-      message: string;
-    };
-    console.error(`[ERROR] GET_ITEM_DETAILS: Failed:`, {
-      status: error.response?.status,
-      message: error.message,
-      userId: userId,
-      url: error.response?.url,
-    });
-    throw error;
+    if (isZoteroApiError(err)) {
+      logger.error("Tool execution failed", {
+        tool: "get_item_details",
+        status: err.response?.status,
+        errorMessage: err.message,
+        url: err.response?.url,
+      });
+    }
+    throw err;
   }
 }

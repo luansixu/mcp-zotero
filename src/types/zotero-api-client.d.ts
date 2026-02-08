@@ -58,7 +58,7 @@ declare module "zotero-api-client/lib/main-node.cjs" {
     library(type: string, id: string): ZoteroClient;
     collections(key?: string): ZoteroClient;
     items(key?: string): ZoteroClient;
-    get(params?: Record<string, any>): Promise<ZoteroResponse>;
+    get(params?: Record<string, unknown>): Promise<ZoteroResponse>;
   }
 
   function api(apiKey: string): ZoteroClient;

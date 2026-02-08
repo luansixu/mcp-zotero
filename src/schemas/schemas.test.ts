@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
-import {
-  GetCollectionItemsSchema,
-  GetItemDetailsSchema,
-  SearchLibrarySchema,
-  GetRecentSchema,
-} from "./index.js";
+import { z } from "zod";
+import { toolConfig as collectionItemsConfig } from "../tools/get-collection-items.js";
+import { toolConfig as itemDetailsConfig } from "../tools/get-item-details.js";
+import { toolConfig as searchConfig } from "../tools/search-library.js";
+import { toolConfig as recentConfig } from "../tools/get-recent.js";
+
+const GetCollectionItemsSchema = z.object(collectionItemsConfig.inputSchema);
+const GetItemDetailsSchema = z.object(itemDetailsConfig.inputSchema);
+const SearchLibrarySchema = z.object(searchConfig.inputSchema);
+const GetRecentSchema = z.object(recentConfig.inputSchema);
 
 describe("GetCollectionItemsSchema", () => {
   it("accepts valid collectionKey", () => {

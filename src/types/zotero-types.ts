@@ -10,6 +10,12 @@ export interface ZoteroTag {
   type?: number;
 }
 
+export interface ZoteroNote {
+  key: string;
+  version: number;
+  note: string;
+}
+
 export interface ZoteroItemData {
   key?: string;
   version?: number;
@@ -24,7 +30,7 @@ export interface ZoteroItemData {
   url?: string;
   tags?: ZoteroTag[];
   collections?: string[];
-  notes?: any[];
+  notes?: ZoteroNote[];
   publicationTitle?: string;
   parentCollection?: string;
   numItems?: number;
@@ -57,9 +63,13 @@ export interface ZoteroItem {
 }
 
 export interface ZoteroRequestConfig {
-  body?: any;
+  body?: Record<string, unknown>;
   headers?: Record<string, string>;
-  params?: any;
+  params?: Record<string, unknown>;
+}
+
+export interface ZoteroResponse {
+  getData(): ZoteroItemData | ZoteroItemData[];
 }
 
 export interface ZoteroApiInterface {
@@ -68,9 +78,17 @@ export interface ZoteroApiInterface {
   items(key?: string): ZoteroApiInterface;
   top(): ZoteroApiInterface;
   trash(): ZoteroApiInterface;
-  get(config?: any): Promise<any>;
+  get(config?: Record<string, unknown>): Promise<ZoteroResponse>;
 }
 
 export interface ZoteroApi {
   (key?: string): ZoteroApiInterface;
+}
+
+export interface ZoteroApiError extends Error {
+  response?: { status: number; url?: string };
+}
+
+export function isZoteroApiError(err: unknown): err is ZoteroApiError {
+  return err instanceof Error;
 }

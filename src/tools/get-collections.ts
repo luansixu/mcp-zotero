@@ -1,27 +1,25 @@
-import { ZoteroApiInterface } from "../types/zotero-types.js";
+import { ZoteroApiInterface, isZoteroApiError } from "../types/zotero-types.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
+import { logger } from "../utils/logger.js";
+
+export const toolConfig = {
+  name: "get_collections",
+  description: "List all collections in your Zotero library",
+  inputSchema: {},
+} as const;
 
 export async function handleGetCollections(
   zoteroApi: ZoteroApiInterface,
   userId: string,
   _args: Record<string, unknown>
-): Promise<{ content: Array<{ type: string; text: string }> }> {
-  console.error(
-    `[DEBUG] GET_COLLECTIONS: Starting with userId ${userId}`
-  );
+): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   try {
-    console.error(
-      `[DEBUG] GET_COLLECTIONS: Testing API connection...`
-    );
     const response = await zoteroApi
       .library("user", userId)
       .collections()
       .get();
 
     const collections = response.getData();
-    console.error(
-      `[DEBUG] GET_COLLECTIONS: Found ${collections.length} collections`
-    );
 
     if (!Array.isArray(collections) || collections.length === 0) {
       return formatErrorResponse("No collections found", {
@@ -37,19 +35,14 @@ export async function handleGetCollections(
       ],
     };
   } catch (err) {
-    const error = err as {
-      response?: {
-        status: number;
-        url?: string;
-      };
-      message: string;
-    };
-    console.error(`[ERROR] GET_COLLECTIONS: Failed:`, {
-      status: error.response?.status,
-      message: error.message,
-      userId: userId,
-      url: error.response?.url,
-    });
-    throw error;
+    if (isZoteroApiError(err)) {
+      logger.error("Tool execution failed", {
+        tool: "get_collections",
+        status: err.response?.status,
+        errorMessage: err.message,
+        url: err.response?.url,
+      });
+    }
+    throw err;
   }
 }

@@ -46,8 +46,8 @@ export function createZoteroApiMock(data: unknown = []) {
     getData: () => data,
   });
 
-  const chainable: Record<string, any> = {};
-  const handler: ProxyHandler<Record<string, any>> = {
+  const chainable: Record<string, unknown> = {};
+  const handler: ProxyHandler<Record<string, unknown>> = {
     get(_target, prop) {
       if (prop === "get") return getStub;
       // All other methods return the proxy itself (chainable)

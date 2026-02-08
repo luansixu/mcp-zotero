@@ -108,7 +108,7 @@ describe("get_collection_items", () => {
 
   it("returns not_found error on 404", async () => {
     const { mock, getStub } = createZoteroApiMock([]);
-    const error404: any = new Error("Not found");
+    const error404 = new Error("Not found") as Error & { response?: { status: number } };
     error404.response = { status: 404 };
     getStub.mockRejectedValueOnce(error404);
 

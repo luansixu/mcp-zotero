@@ -1,14 +1,25 @@
-import { ZoteroApiInterface } from "../types/zotero-types.js";
-import { SearchLibrarySchema } from "../schemas/index.js";
+import { z } from "zod";
+import { ZoteroApiInterface, ZoteroItemData, isZoteroApiError } from "../types/zotero-types.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import { formatCreators } from "../utils/item-formatter.js";
+import { logger } from "../utils/logger.js";
+
+export const toolConfig = {
+  name: "search_library",
+  description: "Search your entire Zotero library",
+  inputSchema: {
+    query: z.string().describe("Search query"),
+  },
+} as const;
+
+const SearchSchema = z.object(toolConfig.inputSchema);
 
 export async function handleSearchLibrary(
   zoteroApi: ZoteroApiInterface,
   userId: string,
   args: Record<string, unknown>
-): Promise<{ content: Array<{ type: string; text: string }> }> {
-  const { query } = SearchLibrarySchema.parse(args);
+): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const { query } = SearchSchema.parse(args);
   if (!query?.trim()) {
     return formatErrorResponse("Search query is required");
   }
@@ -20,11 +31,6 @@ export async function handleSearchLibrary(
       .get({ q: query });
 
     const items = response.getData();
-    console.error(
-      `[DEBUG] SEARCH_LIBRARY: Found ${
-        items?.length || 0
-      } items for query "${query}"`
-    );
 
     if (!Array.isArray(items) || items.length === 0) {
       return formatErrorResponse("No results found", {
@@ -34,9 +40,9 @@ export async function handleSearchLibrary(
       });
     }
 
-    const formatted = items.map((item: Record<string, unknown>) => ({
+    const formatted = items.map((item: ZoteroItemData) => ({
       title: item.title || "Untitled",
-      authors: formatCreators(item.creators as import("../types/zotero-types.js").ZoteroCreator[] | undefined),
+      authors: formatCreators(item.creators),
       date: item.date || "No date",
       key: item.key,
       itemType: item.itemType,
@@ -49,19 +55,14 @@ export async function handleSearchLibrary(
       ],
     };
   } catch (err) {
-    const error = err as {
-      response?: {
-        status: number;
-        url?: string;
-      };
-      message: string;
-    };
-    console.error(`[ERROR] SEARCH_LIBRARY: Failed:`, {
-      status: error.response?.status,
-      message: error.message,
-      userId: userId,
-      url: error.response?.url,
-    });
-    throw error;
+    if (isZoteroApiError(err)) {
+      logger.error("Tool execution failed", {
+        tool: "search_library",
+        status: err.response?.status,
+        errorMessage: err.message,
+        url: err.response?.url,
+      });
+    }
+    throw err;
   }
 }

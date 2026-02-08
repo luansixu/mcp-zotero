@@ -1,17 +1,25 @@
-import { ZoteroApiInterface } from "../types/zotero-types.js";
-import { GetCollectionItemsSchema } from "../schemas/index.js";
+import { z } from "zod";
+import { ZoteroApiInterface, ZoteroItemData, isZoteroApiError } from "../types/zotero-types.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import { formatCreators, formatTags } from "../utils/item-formatter.js";
+import { logger } from "../utils/logger.js";
+
+export const toolConfig = {
+  name: "get_collection_items",
+  description: "Get all items in a specific collection",
+  inputSchema: {
+    collectionKey: z.string().describe("The collection key/ID"),
+  },
+} as const;
+
+const CollectionItemsSchema = z.object(toolConfig.inputSchema);
 
 export async function handleGetCollectionItems(
   zoteroApi: ZoteroApiInterface,
   userId: string,
   args: Record<string, unknown>
-): Promise<{ content: Array<{ type: string; text: string }> }> {
-  const { collectionKey } = GetCollectionItemsSchema.parse(args);
-  console.error(
-    `[DEBUG] GET_COLLECTION_ITEMS: Fetching items for collection ${collectionKey}`
-  );
+): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const { collectionKey } = CollectionItemsSchema.parse(args);
 
   try {
     const response = await zoteroApi
@@ -21,10 +29,6 @@ export async function handleGetCollectionItems(
       .get();
 
     const items = response.getData();
-    console.error(
-      `[DEBUG] GET_COLLECTION_ITEMS: Raw response:`,
-      JSON.stringify(items, null, 2)
-    );
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return formatErrorResponse("Collection is empty", {
@@ -36,22 +40,18 @@ export async function handleGetCollectionItems(
 
     const formatted = items
       .filter((item) => item)
-      .map((item: Record<string, unknown>) => ({
+      .map((item: ZoteroItemData) => ({
         title: item.title || "Untitled",
-        authors: formatCreators(item.creators as import("../types/zotero-types.js").ZoteroCreator[] | undefined),
+        authors: formatCreators(item.creators),
         date: item.date || "No date",
         key: item.key || "No key",
         itemType: item.itemType || "Unknown type",
         abstractNote: item.abstractNote || "No abstract available",
-        tags: formatTags(item.tags as import("../types/zotero-types.js").ZoteroTag[] | undefined),
+        tags: formatTags(item.tags),
         doi: item.DOI || null,
         url: item.url || null,
         publicationTitle: item.publicationTitle || null,
       }));
-
-    console.error(
-      `[DEBUG] GET_COLLECTION_ITEMS: Formatted ${formatted.length} items`
-    );
 
     if (formatted.length === 0) {
       return formatErrorResponse(
@@ -74,32 +74,26 @@ export async function handleGetCollectionItems(
       ],
     };
   } catch (err) {
-    const error = err as {
-      response?: {
-        status: number;
-        url?: string;
-      };
-      message: string;
-    };
+    if (isZoteroApiError(err)) {
+      if (err.response?.status === 404) {
+        return formatErrorResponse(
+          "Collection is empty or not accessible",
+          {
+            collectionKey,
+            suggestion:
+              "Verify the collection exists and try adding some items to it",
+            status: "not_found",
+          }
+        );
+      }
 
-    if (error.response?.status === 404) {
-      return formatErrorResponse(
-        "Collection is empty or not accessible",
-        {
-          collectionKey,
-          suggestion:
-            "Verify the collection exists and try adding some items to it",
-          status: "not_found",
-        }
-      );
+      logger.error("Tool execution failed", {
+        tool: "get_collection_items",
+        status: err.response?.status,
+        errorMessage: err.message,
+        url: err.response?.url,
+      });
     }
-
-    console.error(`[ERROR] GET_COLLECTION_ITEMS: Failed:`, {
-      status: error.response?.status,
-      message: error.message,
-      collectionKey,
-      url: error.response?.url,
-    });
-    throw error;
+    throw err;
   }
 }

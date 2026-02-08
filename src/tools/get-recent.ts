@@ -1,14 +1,25 @@
-import { ZoteroApiInterface } from "../types/zotero-types.js";
-import { GetRecentSchema } from "../schemas/index.js";
+import { z } from "zod";
+import { ZoteroApiInterface, ZoteroItemData, isZoteroApiError } from "../types/zotero-types.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import { formatCreators } from "../utils/item-formatter.js";
+import { logger } from "../utils/logger.js";
+
+export const toolConfig = {
+  name: "get_recent",
+  description: "Get recently added papers to your library",
+  inputSchema: {
+    limit: z.number().optional().default(10).describe("Number of papers to return (default 10)"),
+  },
+} as const;
+
+const RecentSchema = z.object(toolConfig.inputSchema);
 
 export async function handleGetRecent(
   zoteroApi: ZoteroApiInterface,
   userId: string,
   args: Record<string, unknown>
-): Promise<{ content: Array<{ type: string; text: string }> }> {
-  const { limit } = GetRecentSchema.parse(args);
+): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const { limit } = RecentSchema.parse(args);
   try {
     const response = await zoteroApi
       .library("user", userId)
@@ -20,9 +31,6 @@ export async function handleGetRecent(
       });
 
     const items = response.getData();
-    console.error(
-      `[DEBUG] GET_RECENT: Found ${items?.length || 0} recent items`
-    );
 
     if (!Array.isArray(items) || items.length === 0) {
       return formatErrorResponse("No recent items found", {
@@ -30,9 +38,9 @@ export async function handleGetRecent(
       });
     }
 
-    const formatted = items.map((item: Record<string, unknown>) => ({
+    const formatted = items.map((item: ZoteroItemData) => ({
       title: item.title || "Untitled",
-      authors: formatCreators(item.creators as import("../types/zotero-types.js").ZoteroCreator[] | undefined),
+      authors: formatCreators(item.creators),
       dateAdded: item.dateAdded || "No date",
       key: item.key,
       itemType: item.itemType,
@@ -44,19 +52,14 @@ export async function handleGetRecent(
       ],
     };
   } catch (err) {
-    const error = err as {
-      response?: {
-        status: number;
-        url?: string;
-      };
-      message: string;
-    };
-    console.error(`[ERROR] GET_RECENT: Failed:`, {
-      status: error.response?.status,
-      message: error.message,
-      userId: userId,
-      url: error.response?.url,
-    });
-    throw error;
+    if (isZoteroApiError(err)) {
+      logger.error("Tool execution failed", {
+        tool: "get_recent",
+        status: err.response?.status,
+        errorMessage: err.message,
+        url: err.response?.url,
+      });
+    }
+    throw err;
   }
 }
