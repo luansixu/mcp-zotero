@@ -342,6 +342,40 @@ describe("injectCitations", () => {
     expect(result.warnings).toHaveLength(0);
   });
 
+  it("handles minified XML without matching across runs", async () => {
+    // Regression test: minified XML (no newlines) where multiple <w:rPr> exist.
+    // The old .*? regex could backtrack past the first </w:rPr> and match
+    // from the first <w:r> all the way to the zcite run, destroying content.
+    // Key: the zcite run ALSO has <w:rPr>, which lets .*? backtrack to it.
+    const xml =
+      '<w:body><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Title</w:t></w:r>' +
+      '<w:r><w:rPr><w:i/></w:rPr><w:t>Subtitle</w:t></w:r>' +
+      '<w:r><w:rPr><w:noProof/></w:rPr><w:t>&lt;zcite keys=&quot;ABC001&quot;/&gt;</w:t></w:r></w:p></w:body>';
+
+    const zipMock = await setupJsZipMock(xml);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
+    const api = createMockZoteroApi(getStub);
+
+    const result = await injectCitations(
+      "/tmp/test.docx",
+      api,
+      TEST_USER_ID,
+      "apa"
+    );
+
+    expect(result.found).toBe(1);
+    expect(result.injected).toBe(1);
+
+    const writeCall = zipMock.file.mock.calls.find(
+      (c: unknown[]) => c[0] === "word/document.xml" && c.length === 2
+    );
+    const writtenXml = writeCall![1] as string;
+    // The original Title and Subtitle runs must be preserved
+    expect(writtenXml).toContain("<w:t>Title</w:t>");
+    expect(writtenXml).toContain("<w:t>Subtitle</w:t>");
+    expect(writtenXml).toContain("ADDIN ZOTERO_ITEM");
+  });
+
   it("throws on invalid docx (no word/document.xml)", async () => {
     const JSZip = (await import("jszip")).default;
     vi.mocked(JSZip.loadAsync).mockResolvedValueOnce({

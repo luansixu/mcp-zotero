@@ -308,8 +308,10 @@ function buildCitationItems(match, cslData, uid) {
  */
 function replaceZciteInXml(xml, escapedZciteTag, fieldCodeXml) {
   // Case A (preferred): tag is the sole content of a <w:r>
+  // Use [^<]*(?:<(?!/w:rPr>)[^<]*)* instead of .*? inside <w:rPr> to prevent
+  // matching across element boundaries in minified (single-line) XML.
   const soloRunRegex = new RegExp(
-    `<w:r>(?:<w:rPr>.*?</w:rPr>)?<w:t[^>]*>${regexEscape(escapedZciteTag)}</w:t></w:r>`
+    `<w:r>(?:<w:rPr>[^<]*(?:<(?!/w:rPr>)[^<]*)*</w:rPr>)?<w:t[^>]*>${regexEscape(escapedZciteTag)}</w:t></w:r>`
   );
 
   if (soloRunRegex.test(xml)) {
@@ -318,7 +320,7 @@ function replaceZciteInXml(xml, escapedZciteTag, fieldCodeXml) {
 
   // Case B (fallback): tag is inline with other text
   const inlineRegex = new RegExp(
-    `(<w:r>(?:<w:rPr>(.*?)</w:rPr>)?<w:t[^>]*>)(.*?)${regexEscape(escapedZciteTag)}(.*?)(</w:t></w:r>)`
+    `(<w:r>(?:<w:rPr>([^<]*(?:<(?!/w:rPr>)[^<]*)*)</w:rPr>)?<w:t[^>]*>)([^<]*)${regexEscape(escapedZciteTag)}([^<]*)(</w:t></w:r>)`
   );
 
   const inlineMatch = xml.match(inlineRegex);

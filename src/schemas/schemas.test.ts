@@ -68,6 +68,20 @@ describe("GetItemsDetailsSchema", () => {
   it("rejects non-array item_keys", () => {
     expect(() => GetItemsDetailsSchema.parse({ item_keys: "ITEM001" })).toThrow();
   });
+
+  it("defaults include_abstract to false", () => {
+    const result = GetItemsDetailsSchema.parse({ item_keys: ["ITEM001"] });
+    expect(result.include_abstract).toBe(false);
+  });
+
+  it("accepts include_abstract as true", () => {
+    const result = GetItemsDetailsSchema.parse({ item_keys: ["ITEM001"], include_abstract: true });
+    expect(result.include_abstract).toBe(true);
+  });
+
+  it("rejects non-boolean include_abstract", () => {
+    expect(() => GetItemsDetailsSchema.parse({ item_keys: ["ITEM001"], include_abstract: "yes" })).toThrow();
+  });
 });
 
 describe("SearchLibrarySchema", () => {

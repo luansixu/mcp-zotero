@@ -23,6 +23,13 @@ If full text is unavailable for a source, that limitation must be disclosed and 
 source must be used only for claims that can be supported by the abstract alone
 (typically limited to the main conclusion).
 
+However, abstracts with specific quantitative data (sample sizes, effect sizes, p-values,
+confidence intervals) ARE a legitimate source for those specific factual claims.
+Many high-impact journals (Lancet, NEJM, Nature, JAMA) are behind paywalls,
+and excluding them entirely would impoverish the evidence base. The key distinction
+is between *writing from abstracts* (unacceptable — shallow paraphrasing) and
+*citing specific data reported in an abstract* (acceptable — factual and verifiable).
+
 ---
 
 ## Workflow Overview
@@ -99,7 +106,8 @@ Try these sources in order for each article:
 3. **web_fetch on DOI URL**: Often resolves to full HTML text on publisher sites
 4. **Preprint versions**: Authors often deposit preprints on BioRxiv, MedRxiv, arXiv, SSRN
 5. **Author repositories**: University institutional repositories, ResearchGate (limited)
-6. **If all fail**: Use abstract + structured data only, but MARK the source as "abstract-only" and limit claims accordingly
+6. **Paywalled journals** (Lancet, NEJM, Nature, JAMA, etc.): Full text is behind a paywall — this is expected, not a failure. Use the abstract for specific factual claims (quantitative results, study design, sample size). If the user has institutional access, ask them to provide the PDF or paste relevant sections.
+7. **If all fail**: Use abstract + structured data only, but MARK the source as "abstract-only" and limit claims accordingly
 
 ### What "Reading" Means
 
@@ -166,8 +174,10 @@ See `references/article-structures.md` for detailed templates.
 
 - Citations go AFTER the claim, BEFORE the period: "...maintained suppression [4]."
 - Multiple citations: [4,5] or [4-6] for ranges
-- Don't cite sources you haven't read. If you only read the abstract, you can cite
-  it only for claims directly stated in the abstract.
+- Don't cite sources you haven't engaged with. If you only have the abstract,
+  you can cite it for specific factual claims directly stated in the abstract
+  (e.g., quantitative results, study design, sample size). Do NOT use abstract-only
+  sources for interpretive or methodological claims that require full-text context.
 
 **Exit criteria**: Complete draft with all citations placed.
 
@@ -238,6 +248,8 @@ Before delivering the final document, verify:
 - [ ] The article answers the question defined in Phase 1
 - [ ] Citations are numbered/formatted correctly for the chosen style
 - [ ] Sources marked as "abstract-only" are used appropriately (general claims only)
+- [ ] Every source with a freely available PDF has been verified and uploaded to Zotero (hard gate — no exceptions)
+- [ ] No PDF was uploaded without prior content verification (title, authors, actual content)
 
 ---
 
@@ -252,7 +264,48 @@ Before delivering the final document, verify:
 | Narrow perspective | Too few sources | Search broadly in Phase 2 |
 | Parroting abstracts | No genuine understanding | Extract specific data, not conclusions |
 | Inaccessible sources | Not trying multiple access routes | Follow full-text retrieval strategy |
-| Wrong PDF in Zotero | Uploading without content verification | Always read+verify before import, validate with get_item_fulltext |
+| Wrong PDF in Zotero | Uploading without content verification | Hard gate: verify (title+authors+content) → upload → validate with get_item_fulltext |
+
+---
+
+## Paywalled Sources
+
+Many high-impact journals (Lancet, NEJM, Nature, JAMA, Cell, Science) restrict
+full-text access to subscribers. This is a normal part of scientific literature,
+not a workflow failure.
+
+**What you CAN do with abstract-only paywalled sources:**
+- Cite specific quantitative results reported in the abstract (e.g., "HR 0.67, 95% CI 0.54-0.82")
+- Reference the study design and sample size stated in the abstract
+- Cite the main conclusion as stated by the authors
+
+**What you CANNOT do:**
+- Describe methodology details not in the abstract
+- Discuss subgroup analyses, secondary endpoints, or limitations not mentioned in the abstract
+- Use the source as a primary reference for interpretive or mechanistic claims
+
+### Hard Gate — Verify Then Upload
+
+> **NON-NEGOTIABLE:** If a PDF is obtainable through ANY free channel (open access, PMC,
+> Europe PMC, preprints, publisher OA, OA version of a paywalled article), you MUST
+> **verify its content first**, then upload it to Zotero via `import_pdf_to_zotero`.
+>
+> **Verify before upload:** Read the PDF via `web_fetch` and confirm (a) title matches,
+> (b) authors match, (c) content is the actual paper — not a login page, CAPTCHA, or
+> wrong article. Repositories can serve incorrect PDFs. Uploading unverified PDFs
+> pollutes the user's Zotero library.
+>
+> **Validate after upload:** Call `get_item_fulltext` and spot-check that indexed content
+> matches the expected paper.
+>
+> This applies unconditionally:
+> - Even if you already read the content via `web_fetch`
+> - Even if the source is used for a single claim
+> - Even for sources you classify as "abstract-only" — if a preprint or OA version exists, upload it
+> - If the user provides a PDF (institutional access), upload it
+>
+> The softened citability policy for paywalled sources does NOT relax the duty to archive.
+> Every available PDF must end up in Zotero — verified.
 
 ---
 

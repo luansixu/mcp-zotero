@@ -7,12 +7,19 @@ import { logger } from "../utils/logger.js";
 export const toolConfig = {
   name: "get_items_details",
   description:
-    "Get metadata for multiple Zotero items in a single call. Accepts an array of item keys and returns a map of key → metadata. Use this instead of calling get_item_details multiple times. Returns title, authors, date, DOI, item type, publication title, and URL for each item. Abstract is excluded to keep the response lightweight.",
+    "Get metadata for multiple Zotero items in a single call. Accepts an array of item keys and returns a map of key → metadata. Use this instead of calling get_item_details multiple times. Returns title, authors, date, DOI, item type, publication title, and URL for each item. Set include_abstract to include abstracts (excluded by default to keep responses lightweight).",
   inputSchema: {
     item_keys: z
       .array(z.string())
       .describe(
         'Array of Zotero item keys (e.g. ["EUHUT5K3", "F9UQM7N2"]). Get these from search_library, add_items_by_doi, or get_collection_items.'
+      ),
+    include_abstract: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        "Include abstractNote in the response. Default false to keep responses lightweight."
       ),
   },
 } as const;
@@ -27,6 +34,7 @@ interface ItemMetadata {
   itemType: string;
   publicationTitle: string | null;
   url: string | null;
+  abstractNote?: string;
 }
 
 export async function handleGetItemsDetails(
@@ -34,7 +42,7 @@ export async function handleGetItemsDetails(
   userId: string,
   args: Record<string, unknown>
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-  const { item_keys } = GetItemsDetailsSchema.parse(args);
+  const { item_keys, include_abstract } = GetItemsDetailsSchema.parse(args);
 
   if (item_keys.length === 0) {
     return formatErrorResponse("At least one item key is required");
@@ -69,6 +77,9 @@ export async function handleGetItemsDetails(
         publicationTitle: item.publicationTitle || null,
         url: item.url || null,
       };
+      if (include_abstract && item.abstractNote) {
+        result[key].abstractNote = item.abstractNote;
+      }
     }
 
     return {

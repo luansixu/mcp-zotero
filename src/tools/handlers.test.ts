@@ -206,7 +206,7 @@ describe("get_items_details", () => {
     expect(getStub).toHaveBeenCalledWith({ itemKey: "ABC12345,DEF67890" });
   });
 
-  it("excludes abstract from response", async () => {
+  it("excludes abstract from response by default", async () => {
     const { mock } = createZoteroApiMock([fullItemFixture]);
     const result = await handleToolCall(
       "get_items_details",
@@ -218,6 +218,19 @@ describe("get_items_details", () => {
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed["ABC12345"]).not.toHaveProperty("abstract");
     expect(parsed["ABC12345"]).not.toHaveProperty("abstractNote");
+  });
+
+  it("includes abstract when include_abstract is true", async () => {
+    const { mock } = createZoteroApiMock([fullItemFixture]);
+    const result = await handleToolCall(
+      "get_items_details",
+      { item_keys: ["ABC12345"], include_abstract: true },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed["ABC12345"].abstractNote).toBe(fullItemFixture.abstractNote);
   });
 
   it("returns error for empty item_keys array", async () => {

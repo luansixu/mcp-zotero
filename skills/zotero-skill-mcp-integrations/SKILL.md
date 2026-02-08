@@ -49,7 +49,7 @@ The script has a built-in fallback: if the ESM import fails, it tries `createReq
 
 ### Step 2 — Search / add papers
 
-> **Document access:** If you cannot access or retrieve a document from the internet (e.g., behind a paywall, blocked URL, PDF not available), inform the user and ask them to provide the document content directly in the chat. The user can paste text, upload a PDF, or provide the relevant excerpts.
+> **Document access:** If you cannot access or retrieve a document from the internet (e.g., behind a paywall, blocked URL, PDF not available), inform the user and ask them to provide the document content directly in the chat. The user can paste text, upload a PDF, or provide the relevant excerpts. For paywalled journals, the abstract is acceptable for specific factual claims — see Step 2b for details. Available PDFs **must** still be uploaded to Zotero.
 
 Use MCP tools to find or add papers:
 - `search_library` — search existing Zotero library
@@ -60,6 +60,31 @@ Note every `item_key` returned — these are needed for citations.
 
 ### Step 2b — Import PDFs and read sources
 
+> **HARD GATE — VERIFY THEN UPLOAD: MANDATORY FOR EVERY AVAILABLE PDF**
+>
+> For every source cited in the document, you MUST verify and upload the PDF to Zotero
+> if it is obtainable through ANY free channel (open access, PMC, Europe PMC, preprints,
+> publisher OA). The two steps are inseparable — never upload without verifying first:
+>
+> 1. **VERIFY** — before calling `import_pdf_to_zotero`, read the PDF content via `web_fetch`
+>    and confirm: (a) the title matches the expected article, (b) the authors match,
+>    (c) the content is the actual paper, not a login page, CAPTCHA, or a different article.
+>    Repositories (especially Europe PMC) can serve wrong PDFs for a given accession ID.
+> 2. **UPLOAD** — only after verification passes, call `import_pdf_to_zotero`.
+> 3. **VALIDATE** — after upload, call `get_item_fulltext` and spot-check the first few
+>    hundred characters to confirm the indexed content matches the expected paper.
+>
+> This obligation is unconditional:
+> - It applies even if you already read the content via `web_fetch`
+> - It applies even if the source will only be used for a single claim
+> - It applies even for "abstract-only" paywalled sources IF a preprint or OA version exists
+> - Skipping verification or upload to save time is NOT acceptable
+> - Uploading an unverified PDF pollutes the user's Zotero library — treat it as a bug
+>
+> Only after exhausting all free PDF channels (5 attempts) AND failing, fall back to
+> `add_linked_url_attachment`. The user's Zotero library must contain every available PDF,
+> and every uploaded PDF must have been verified.
+
 After adding items, import PDFs and read each source **before** using it in the document.
 A citation without reading is just decoration — it doesn't support any claim.
 
@@ -67,12 +92,24 @@ A citation without reading is just decoration — it doesn't support any claim.
 
 For **every** source, complete these steps in order before citing it in the document:
 
-- [ ] **Import PDF** — download and upload to Zotero via `import_pdf_to_zotero`
+- [ ] **Verify PDF** — read the PDF content via `web_fetch` and confirm title, authors, and content match the expected article. NEVER skip this step.
+- [ ] **Import PDF** — only after verification, upload to Zotero via `import_pdf_to_zotero`. If the PDF is freely available, this is **mandatory** even if you've already read the content through other means.
+- [ ] **Validate post-upload** — call `get_item_fulltext` and spot-check the indexed content matches the expected paper.
 - [ ] **Fallback** — if import fails after 5 attempts, attach URL via `add_linked_url_attachment`
 - [ ] **Read full text** — use `get_item_fulltext` or `web_fetch` to read the actual content (not just the abstract)
 - [ ] **Only then cite** — use the source in Step 4 only after you have read and understood it
 
-> **Do NOT skip to Step 4.** A `<zcite>` tag for a source you haven't read produces a technically valid citation but a scientifically useless one. If you cannot access the full text, mark the source as "abstract-only" and limit its use to claims directly stated in the abstract.
+> **Do NOT skip to Step 4.** A `<zcite>` tag for a source you haven't read produces a technically valid citation but a scientifically useless one.
+
+#### Paywalled sources (Lancet, NEJM, Nature, JAMA, etc.)
+
+For sources behind a paywall where you cannot access the full text:
+
+- **The abstract IS a legitimate source** for specific factual claims: quantitative results, study design, sample size, and the main conclusion as stated by the authors.
+- **Do NOT use abstract-only sources** for interpretive claims, methodological details, or subgroup analyses not mentioned in the abstract.
+- **Mark the source as "abstract-only"** and limit its use accordingly.
+- **If the user has institutional access**, ask them to provide the PDF or paste relevant sections. If they provide it, upload it to Zotero.
+- **PDF archiving is NON-NEGOTIABLE** when the PDF is available through any free channel (open access, PMC, preprint, OA version of a paywalled article). You MUST call `import_pdf_to_zotero`. The softened policy applies ONLY to *citability*, NEVER to the duty to archive. See the hard gate above.
 
 #### Read first, upload after
 
