@@ -1,4 +1,5 @@
-import { CslItemData } from "../types/csl-types.js";
+import { CslItemData, CslName } from "../types/csl-types.js";
+import { ZoteroItemData } from "../types/zotero-types.js";
 
 const CSL_TO_ZOTERO_TYPE: Record<string, string> = {
   "article-journal": "journalArticle",
@@ -10,6 +11,17 @@ const CSL_TO_ZOTERO_TYPE: Record<string, string> = {
   webpage: "webpage",
   dataset: "document",
   article: "journalArticle",
+};
+
+const ZOTERO_TO_CSL_TYPE: Record<string, string> = {
+  journalArticle: "article-journal",
+  book: "book",
+  bookSection: "chapter",
+  conferencePaper: "paper-conference",
+  report: "report",
+  thesis: "thesis",
+  webpage: "webpage",
+  document: "dataset",
 };
 
 interface ZoteroItemPayload {
@@ -75,5 +87,33 @@ export function cslToZoteroItem(
     abstractNote: csl.abstract ?? "",
     collections,
     tags,
+  };
+}
+
+export function zoteroItemToCsl(item: ZoteroItemData): CslItemData {
+  const authors: CslName[] = (item.creators ?? [])
+    .filter((c) => c.creatorType === "author")
+    .map((c) => ({
+      family: c.lastName ?? c.name ?? "",
+      given: c.firstName ?? "",
+    }));
+
+  let issued: CslItemData["issued"] | undefined;
+  if (item.date) {
+    const parts = item.date.split("-").map(Number).filter((n) => !isNaN(n));
+    if (parts.length > 0) {
+      issued = { "date-parts": [parts] };
+    }
+  }
+
+  return {
+    type: ZOTERO_TO_CSL_TYPE[item.itemType ?? ""] ?? "article-journal",
+    title: item.title,
+    author: authors.length > 0 ? authors : undefined,
+    issued,
+    DOI: item.DOI,
+    "container-title": item.publicationTitle,
+    URL: item.url,
+    abstract: item.abstractNote,
   };
 }

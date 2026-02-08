@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cslToZoteroItem } from "./csl-to-zotero.js";
+import { cslToZoteroItem, zoteroItemToCsl } from "./csl-to-zotero.js";
 import { CslItemData } from "../types/csl-types.js";
 
 describe("cslToZoteroItem", () => {
@@ -79,5 +79,69 @@ describe("cslToZoteroItem", () => {
     expect(result.date).toBe("");
     expect(result.DOI).toBe("");
     expect(result.publicationTitle).toBe("");
+  });
+});
+
+describe("zoteroItemToCsl", () => {
+  it("converts journalArticle to article-journal", () => {
+    const result = zoteroItemToCsl({
+      itemType: "journalArticle",
+      title: "Test Paper",
+      creators: [
+        { firstName: "John", lastName: "Smith", creatorType: "author" },
+      ],
+      date: "2023",
+      DOI: "10.1234/test",
+      publicationTitle: "Test Journal",
+    });
+
+    expect(result.type).toBe("article-journal");
+    expect(result.title).toBe("Test Paper");
+    expect(result.DOI).toBe("10.1234/test");
+    expect(result["container-title"]).toBe("Test Journal");
+    expect(result.author).toEqual([{ family: "Smith", given: "John" }]);
+    expect(result.issued).toEqual({ "date-parts": [[2023]] });
+  });
+
+  it("converts book to book", () => {
+    const result = zoteroItemToCsl({
+      itemType: "book",
+      title: "A Book",
+    });
+    expect(result.type).toBe("book");
+  });
+
+  it("defaults unknown type to article-journal", () => {
+    const result = zoteroItemToCsl({
+      itemType: "unknownType",
+    });
+    expect(result.type).toBe("article-journal");
+  });
+
+  it("parses multi-part date correctly", () => {
+    const result = zoteroItemToCsl({
+      date: "2023-06-15",
+    });
+    expect(result.issued).toEqual({ "date-parts": [[2023, 6, 15]] });
+  });
+
+  it("handles missing date", () => {
+    const result = zoteroItemToCsl({});
+    expect(result.issued).toBeUndefined();
+  });
+
+  it("handles missing creators", () => {
+    const result = zoteroItemToCsl({});
+    expect(result.author).toBeUndefined();
+  });
+
+  it("filters only authors from creators", () => {
+    const result = zoteroItemToCsl({
+      creators: [
+        { firstName: "John", lastName: "Smith", creatorType: "author" },
+        { firstName: "Jane", lastName: "Doe", creatorType: "editor" },
+      ],
+    });
+    expect(result.author).toEqual([{ family: "Smith", given: "John" }]);
   });
 });

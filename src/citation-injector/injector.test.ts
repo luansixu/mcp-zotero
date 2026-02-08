@@ -61,12 +61,13 @@ async function setupJsZipMock(documentXml: string) {
 
 const TEST_USER_ID = "12345";
 
-const defaultCslData = {
+// Mock returns Zotero-format data (injector converts to CSL internally)
+const defaultZoteroData = {
   getData: () => ({
-    type: "article-journal",
+    itemType: "journalArticle",
     title: "Test Paper",
-    author: [{ family: "Smith", given: "John" }],
-    issued: { "date-parts": [["2023"]] },
+    creators: [{ firstName: "John", lastName: "Smith", creatorType: "author" }],
+    date: "2023",
   }),
 };
 
@@ -85,7 +86,7 @@ describe("injectCitations", () => {
     ].join("");
 
     const zipMock = await setupJsZipMock(xml);
-    const getStub = vi.fn().mockResolvedValue(defaultCslData);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
     const api = createMockZoteroApi(getStub);
 
     const result = await injectCitations(
@@ -117,7 +118,7 @@ describe("injectCitations", () => {
     ].join("");
 
     await setupJsZipMock(xml);
-    const getStub = vi.fn().mockResolvedValue(defaultCslData);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
     const api = createMockZoteroApi(getStub);
 
     const result = await injectCitations(
@@ -139,7 +140,7 @@ describe("injectCitations", () => {
     ].join("");
 
     await setupJsZipMock(xml);
-    const getStub = vi.fn().mockResolvedValue(defaultCslData);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
     const api = createMockZoteroApi(getStub);
 
     const result = await injectCitations(
@@ -161,7 +162,7 @@ describe("injectCitations", () => {
     ].join("");
 
     const zipMock = await setupJsZipMock(xml);
-    const getStub = vi.fn().mockResolvedValue(defaultCslData);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
     const api = createMockZoteroApi(getStub);
 
     const result = await injectCitations(
@@ -188,7 +189,7 @@ describe("injectCitations", () => {
     ].join("");
 
     const zipMock = await setupJsZipMock(xml);
-    const getStub = vi.fn().mockResolvedValue(defaultCslData);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
     const api = createMockZoteroApi(getStub);
 
     const result = await injectCitations(
@@ -235,7 +236,7 @@ describe("injectCitations", () => {
     ].join("");
 
     const zipMock = await setupJsZipMock(xml);
-    const getStub = vi.fn().mockResolvedValue(defaultCslData);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
     const api = createMockZoteroApi(getStub);
 
     await injectCitations("/tmp/test.docx", api, TEST_USER_ID, "apa");

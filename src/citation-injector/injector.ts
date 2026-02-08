@@ -1,10 +1,11 @@
 import JSZip from "jszip";
 import { readFile, writeFile } from "node:fs/promises";
-import { ZoteroApiInterface } from "../types/zotero-types.js";
+import { ZoteroApiInterface, ZoteroItemData } from "../types/zotero-types.js";
 import { CslItemData, ZoteroCitationItem } from "../types/csl-types.js";
 import { generateZoteroFieldCode, generateBibliographyFieldCode } from "./field-codes.js";
 import { formatCitationText } from "./citation-formatter.js";
 import { regexEscape } from "./xml-utils.js";
+import { zoteroItemToCsl } from "../utils/csl-to-zotero.js";
 
 export interface InjectionResult {
   outputPath: string;
@@ -52,9 +53,9 @@ async function fetchCslData(
     const response = await zoteroApi
       .library("user", userId)
       .items(key)
-      .get({ format: "csljson" });
-    const data = response.getData() as unknown as CslItemData;
-    cslData.set(key, data);
+      .get();
+    const zoteroItem = response.getData() as ZoteroItemData;
+    cslData.set(key, zoteroItemToCsl(zoteroItem));
   }
 
   return cslData;
