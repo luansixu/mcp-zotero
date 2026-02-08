@@ -10,6 +10,12 @@ export interface ZoteroTag {
   type?: number;
 }
 
+export interface ZoteroNote {
+  key: string;
+  version: number;
+  note: string;
+}
+
 export interface ZoteroItemData {
   key?: string;
   version?: number;
@@ -24,11 +30,16 @@ export interface ZoteroItemData {
   url?: string;
   tags?: ZoteroTag[];
   collections?: string[];
-  notes?: any[];
+  notes?: ZoteroNote[];
   publicationTitle?: string;
+  contentType?: string;
   parentCollection?: string;
   numItems?: number;
   name?: string;
+  linkMode?: string;
+  parentItem?: string;
+  websiteTitle?: string;
+  accessDate?: string;
 }
 
 export interface ZoteroItem {
@@ -57,20 +68,49 @@ export interface ZoteroItem {
 }
 
 export interface ZoteroRequestConfig {
-  body?: any;
+  body?: Record<string, unknown>;
   headers?: Record<string, string>;
-  params?: any;
+  params?: Record<string, unknown>;
+}
+
+export interface ZoteroResponse {
+  getData(): ZoteroItemData | ZoteroItemData[];
+}
+
+export interface ZoteroWriteResponse {
+  isSuccess(): boolean;
+  getData(): ZoteroItemData[];
+  getErrors(): Record<string, string>;
+  getEntityByIndex(index: number): ZoteroItemData;
 }
 
 export interface ZoteroApiInterface {
   library(type: string, id: number | string): ZoteroApiInterface;
   collections(key?: string): ZoteroApiInterface;
   items(key?: string): ZoteroApiInterface;
+  children(): ZoteroApiInterface;
   top(): ZoteroApiInterface;
   trash(): ZoteroApiInterface;
-  get(config?: any): Promise<any>;
+  get(config?: Record<string, unknown>): Promise<ZoteroResponse>;
+  post(data: unknown[], opts?: Record<string, unknown>): Promise<ZoteroWriteResponse>;
+}
+
+export interface ZoteroFulltextResponse {
+  content: string;
+  indexedPages?: number;
+  totalPages?: number;
+  indexedChars?: number;
+  totalChars?: number;
 }
 
 export interface ZoteroApi {
   (key?: string): ZoteroApiInterface;
+}
+
+export interface ZoteroApiError extends Error {
+  response?: { status: number; url?: string };
+}
+
+export function isZoteroApiError(err: unknown): err is ZoteroApiError {
+  return err instanceof Error;
 }

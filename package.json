@@ -4,11 +4,12 @@
   "version": "1.0.6",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kaliaboi/mcp-zotero"
+    "url": "https://github.com/Xevos117/mcp-zotero"
   },
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "build": "tsc && chmod +x build/server.js",
     "postbuild": "echo '#!/usr/bin/env node' | cat - build/server.js > temp && mv temp build/server.js",
     "start": "node build/server.js"
@@ -27,17 +28,20 @@
     "zotero-api-client",
     "claude"
   ],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "author": "Xevos17",
+  "license": "MIT",
+  "description": "MCP server for Zotero integration with citation management",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
     "dotenv": "^16.4.7",
+    "jszip": "^3.10.1",
+    "unpdf": "^1.4.0",
     "zod": "^3.24.1",
     "zotero-api-client": "^0.46.0"
   },
   "devDependencies": {
     "@types/node": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^4.0.18"
   }
 }

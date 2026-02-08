@@ -1,39 +1,31 @@
 # MCP Zotero
 
-![NPM Version](https://img.shields.io/npm/v/mcp-zotero) [![smithery badge](https://smithery.ai/badge/mcp-zotero)](https://smithery.ai/server/mcp-zotero)
+A Model Context Protocol server for Zotero integration. It gives any LLM full access to your Zotero library: search, organize, add papers by DOI, import PDFs, read full-text content, and inject live citations into Word documents.
 
-A Model Context Protocol server for Zotero integration that allows Claude to interact with your Zotero library.
+> Originally based on [mcp-zotero](https://github.com/kaliaboi/mcp-zotero) by Abhishek Kalia.
+> This project has since been extensively rewritten with a new architecture, 12 tools (up from 5), citation injection, PDF management, and Claude skill support.
 
-<a href="https://glama.ai/mcp/servers/mjvu0xzzzz"><img width="380" height="200" src="https://glama.ai/mcp/servers/mjvu0xzzzz/badge" alt="Zotero MCP server" /></a>
+## Local vs Remote LLMs
+
+The MCP server is **self-contained**: a local LLM with filesystem access (e.g. Claude Code, LM Studio, Ollama with tool support) can use all 12 tools directly, including `inject_citations` which reads and writes `.docx` files on disk.
+
+For **remote/sandboxed LLMs** (e.g. Claude.ai via Projects) that cannot access your filesystem, the repository includes a **Claude skill** (`skills/zotero-skill-mcp-integrations/`) that runs the citation injection entirely inside the sandbox. The skill generates the `.docx` in-memory using `jszip`, so no filesystem round-trip is needed. The MCP tools are still used for all Zotero API operations (search, add, metadata), while the skill handles the final document assembly.
+
+| Scenario | MCP server | Skill needed? |
+|---|---|---|
+| Local LLM (Claude Code, LM Studio, etc.) | All 12 tools | No |
+| Remote LLM (Claude.ai Projects) | API tools (search, add, metadata) | Yes, for citation injection |
 
 ## Setup
 
 1. Get your Zotero credentials:
 
    ```bash
-   # First, create an API key at https://www.zotero.org/settings/keys
-   # Then use it to get your user ID:
+   # Create an API key at https://www.zotero.org/settings/keys
+   # (enable library read/write + file access)
+   # Then retrieve your user ID:
    curl -H "Zotero-API-Key: YOUR_API_KEY" https://api.zotero.org/keys/current
    ```
-
-   The response will look like:
-
-   ```json
-   {
-     "userID": 123456,
-     "username": "your_username",
-     "access": {
-       "user": {
-         "library": true,
-         "files": true,
-         "notes": true,
-         "write": true
-       }
-     }
-   }
-   ```
-
-   The `userID` value is what you need.
 
 2. Set environment variables:
 
@@ -42,72 +34,86 @@ A Model Context Protocol server for Zotero integration that allows Claude to int
    export ZOTERO_USER_ID="user-id-from-curl"
    ```
 
-3. Verify your credentials:
-
-   ```bash
-   # Test that your credentials work:
-   curl -H "Zotero-API-Key: $ZOTERO_API_KEY" \
-        "https://api.zotero.org/users/$ZOTERO_USER_ID/collections"
-   ```
-
-   You should see your collections list in the response.
-
-4. Install and run:
-
-   ```bash
-   # Install globally (recommended)
-   npm install -g mcp-zotero
-   mcp-zotero
-
-   # Or run directly with npx
-   npx mcp-zotero
-   ```
-
 ## Integration with Claude Desktop
 
-To use this server with Claude Desktop, add the following to your Claude Desktop configuration:
+Add to your Claude Desktop configuration:
 
 ```json
 {
   "mcpServers": {
     "zotero": {
-      "command": "mcp-zotero",
+      "command": "npx",
+      "args": ["tsx", "path/to/src/server.ts"],
       "env": {
-        "ZOTERO_API_KEY": YOUR_API_KEY,
-        "ZOTERO_USER_ID": YOUR_USER_ID
+        "ZOTERO_API_KEY": "YOUR_API_KEY",
+        "ZOTERO_USER_ID": "YOUR_USER_ID"
       }
     }
   }
 }
 ```
 
+## Integration with Claude Code
+
+```bash
+claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"env":{"ZOTERO_API_KEY":"...","ZOTERO_USER_ID":"..."}}'
+```
+
 ## Available Tools
 
-- `get_collections`: List all collections in your library
-- `get_collection_items`: Get items in a specific collection
-- `get_item_details`: Get detailed information about a paper
-- `search_library`: Search your entire library
-- `get_recent`: Get recently added papers
+### Library browsing
 
-## Troubleshooting
+| Tool | Description |
+|---|---|
+| `get_collections` | List all collections (folders) with keys, names, and parent relationships |
+| `get_collection_items` | Get items in a specific collection with keys, titles, authors, dates |
+| `search_library` | Search by query, or list items sorted by field (date, title, etc.) |
+| `get_items_details` | Batch metadata retrieval for multiple items in a single call |
+| `get_item_fulltext` | Get full-text content of a PDF attachment via Zotero's fulltext index |
 
-If you encounter any issues:
+### Adding content
 
-1. Verify your environment variables are set:
+| Tool | Description |
+|---|---|
+| `add_items_by_doi` | Add papers by DOI resolution (DOI -> CSL-JSON -> Zotero item) |
+| `add_web_item` | Save a web page as a Zotero item (for articles without DOI) |
+| `create_collection` | Create a new collection, optionally nested under a parent |
+| `import_pdf_to_zotero` | Download a PDF from URL, upload to Zotero storage, auto-index full text |
+| `add_linked_url_attachment` | Attach a URL to an existing item or create a standalone link |
 
-   ```bash
-   echo $ZOTERO_API_KEY
-   echo $ZOTERO_USER_ID
-   ```
+### Citation & documents
 
-2. Check the installation:
+| Tool | Description |
+|---|---|
+| `inject_citations` | Replace `<zcite>` placeholders in `.docx` with native Zotero field codes |
+| `get_user_id` | Returns the Zotero user ID (needed by the citation injection skill) |
 
-   ```bash
-   npm list -g mcp-zotero
-   ```
+## Citation Injection
 
-3. Try reinstalling:
-   ```bash
-   npm uninstall -g mcp-zotero
-   npm install -g mcp-zotero
-   ```
+The `inject_citations` tool (and the equivalent Claude skill) replaces `<zcite>` placeholder tags in Word documents with native Zotero field codes. After injection, opening the document in Word with the Zotero plugin and clicking **Zotero -> Refresh** connects the citations to your live library.
+
+Supported citation styles: **APA**, **IEEE**, **Vancouver**, **Harvard**, **Chicago**.
+
+Example placeholder:
+```
+<zcite keys="ABC12345" num="1"/>
+```
+
+## Development
+
+```bash
+npm install
+npm run build          # Compile TypeScript
+npm test               # Run tests (vitest, 200+ tests)
+npx tsx src/server.ts  # Run directly without building
+```
+
+### Debug with MCP Inspector
+
+```bash
+npx @modelcontextprotocol/inspector npx tsx src/server.ts
+```
+
+## License
+
+MIT - see [LICENSE](LICENSE) for details.
