@@ -55,4 +55,5 @@ local/
 
 .docs/
 *.md
+!skills/**/*.md
 .claude/
