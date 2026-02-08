@@ -5,6 +5,9 @@ import { handleGetCollectionItems, toolConfig as collectionItemsConfig } from ".
 import { handleGetItemDetails, toolConfig as itemDetailsConfig } from "./get-item-details.js";
 import { handleSearchLibrary, toolConfig as searchConfig } from "./search-library.js";
 import { handleGetRecent, toolConfig as recentConfig } from "./get-recent.js";
+import { handleCreateCollection, toolConfig as createCollectionConfig } from "./create-collection.js";
+import { handleAddItemsByDoi, toolConfig as addItemsByDoiConfig } from "./add-items-by-doi.js";
+import { handleInjectCitations, toolConfig as injectCitationsConfig } from "./inject-citations.js";
 
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
@@ -20,6 +23,9 @@ const handlers: Record<string, ToolHandler> = {
   get_item_details: handleGetItemDetails,
   search_library: handleSearchLibrary,
   get_recent: handleGetRecent,
+  create_collection: handleCreateCollection,
+  add_items_by_doi: handleAddItemsByDoi,
+  inject_citations: handleInjectCitations,
 };
 
 export async function handleToolCall(
@@ -41,6 +47,9 @@ const toolConfigs = [
   { config: itemDetailsConfig, handler: handleGetItemDetails },
   { config: searchConfig, handler: handleSearchLibrary },
   { config: recentConfig, handler: handleGetRecent },
+  { config: createCollectionConfig, handler: handleCreateCollection },
+  { config: addItemsByDoiConfig, handler: handleAddItemsByDoi },
+  { config: injectCitationsConfig, handler: handleInjectCitations },
 ];
 
 export function registerAllTools(

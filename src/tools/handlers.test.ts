@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { handleToolCall } from "./index.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import {
@@ -7,6 +7,14 @@ import {
   minimalItemFixture,
   collectionFixture,
 } from "../__mocks__/zotero-api.mock.js";
+
+vi.mock("../utils/doi-resolver.js", () => ({
+  resolveDois: vi.fn(),
+}));
+
+vi.mock("../citation-injector/injector.js", () => ({
+  injectCitations: vi.fn(),
+}));
 
 const TEST_USER_ID = "12345";
 
@@ -278,6 +286,277 @@ describe("get_recent", () => {
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.error).toBe("No recent items found");
     expect(parsed.suggestion).toBeDefined();
+  });
+});
+
+// ─── create_collection ─────────────────────────────────────────
+
+describe("create_collection", () => {
+  it("creates collection and returns key + name", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "NEW001", name: "Test Collection" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "create_collection",
+      { name: "Test Collection" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.collection_key).toBe("NEW001");
+    expect(parsed.name).toBe("Test Collection");
+  });
+
+  it("creates collection with parent_collection", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "SUB001", name: "Sub Collection", parentCollection: "PARENT01" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "create_collection",
+      { name: "Sub Collection", parent_collection: "PARENT01" },
+      mock,
+      TEST_USER_ID
+    );
+
+    expect(postStub).toHaveBeenCalledWith([
+      { name: "Sub Collection", parentCollection: "PARENT01" },
+    ]);
+  });
+
+  it("returns error for empty name", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "create_collection",
+      { name: "   " },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Collection name is required");
+  });
+
+  it("returns error when API POST fails", async () => {
+    const writeData = {
+      isSuccess: false,
+      data: [],
+      errors: { "0": "Invalid collection data" },
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "create_collection",
+      { name: "Fail Collection" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Failed to create collection");
+  });
+});
+
+// ─── add_items_by_doi ──────────────────────────────────────────
+
+describe("add_items_by_doi", () => {
+  it("resolves DOI and creates item successfully", async () => {
+    const { resolveDois } = await import("../utils/doi-resolver.js");
+    const resolveDoiMock = vi.mocked(resolveDois);
+    resolveDoiMock.mockResolvedValueOnce({
+      success: [
+        {
+          doi: "10.1234/test",
+          data: {
+            type: "article-journal",
+            title: "Test Paper",
+            author: [{ family: "Smith", given: "John" }],
+            issued: { "date-parts": [["2023"]] },
+            DOI: "10.1234/test",
+          },
+        },
+      ],
+      failed: [],
+    });
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "ITEM001", title: "Test Paper" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_items_by_doi",
+      { dois: ["10.1234/test"] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.success).toHaveLength(1);
+    expect(parsed.success[0].doi).toBe("10.1234/test");
+    expect(parsed.success[0].item_key).toBe("ITEM001");
+    expect(parsed.failed).toHaveLength(0);
+  });
+
+  it("handles partially failed DOIs", async () => {
+    const { resolveDois } = await import("../utils/doi-resolver.js");
+    const resolveDoiMock = vi.mocked(resolveDois);
+    resolveDoiMock.mockResolvedValueOnce({
+      success: [
+        {
+          doi: "10.1234/good",
+          data: {
+            type: "article-journal",
+            title: "Good Paper",
+            DOI: "10.1234/good",
+          },
+        },
+      ],
+      failed: [{ doi: "10.9999/bad", error: "Not found" }],
+    });
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "GOOD01", title: "Good Paper" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_items_by_doi",
+      { dois: ["10.1234/good", "10.9999/bad"] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.success).toHaveLength(1);
+    expect(parsed.failed).toHaveLength(1);
+    expect(parsed.failed[0].doi).toBe("10.9999/bad");
+  });
+
+  it("returns error when all DOIs fail", async () => {
+    const { resolveDois } = await import("../utils/doi-resolver.js");
+    const resolveDoiMock = vi.mocked(resolveDois);
+    resolveDoiMock.mockResolvedValueOnce({
+      success: [],
+      failed: [
+        { doi: "10.9999/bad1", error: "Not found" },
+        { doi: "10.9999/bad2", error: "Not found" },
+      ],
+    });
+
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "add_items_by_doi",
+      { dois: ["10.9999/bad1", "10.9999/bad2"] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("All DOI resolutions failed");
+  });
+
+  it("returns error for empty dois array", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "add_items_by_doi",
+      { dois: [] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("At least one DOI is required");
+  });
+
+  it("passes collection_key and tags to converter", async () => {
+    const { resolveDois } = await import("../utils/doi-resolver.js");
+    const resolveDoiMock = vi.mocked(resolveDois);
+    resolveDoiMock.mockResolvedValueOnce({
+      success: [
+        {
+          doi: "10.1234/test",
+          data: {
+            type: "article-journal",
+            title: "Tagged Paper",
+            DOI: "10.1234/test",
+          },
+        },
+      ],
+      failed: [],
+    });
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "TAG001", title: "Tagged Paper" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_items_by_doi",
+      { dois: ["10.1234/test"], collection_key: "COL001", tags: ["ai"] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("collections", ["COL001"]);
+    expect(postedData[0]).toHaveProperty("tags", [{ tag: "ai" }]);
+  });
+});
+
+// ─── inject_citations ──────────────────────────────────────────
+
+describe("inject_citations", () => {
+  it("returns error for missing file_path", async () => {
+    const { mock } = createZoteroApiMock([]);
+    await expect(
+      handleToolCall("inject_citations", {}, mock, TEST_USER_ID)
+    ).rejects.toThrow();
+  });
+
+  it("returns error for non-.docx file", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "inject_citations",
+      { file_path: "/tmp/document.pdf" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("File must be a .docx file");
+  });
+
+  it("calls injectCitations and returns result", async () => {
+    const { injectCitations: injectMock } = await import(
+      "../citation-injector/injector.js"
+    );
+    vi.mocked(injectMock).mockResolvedValueOnce({
+      outputPath: "/tmp/doc_cited.docx",
+      found: 3,
+      injected: 3,
+    });
+
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "inject_citations",
+      { file_path: "/tmp/doc.docx", style: "apa" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.output_path).toBe("/tmp/doc_cited.docx");
+    expect(parsed.citations_found).toBe(3);
+    expect(parsed.citations_injected).toBe(3);
   });
 });
 

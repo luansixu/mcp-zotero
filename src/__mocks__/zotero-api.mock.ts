@@ -33,6 +33,12 @@ export const collectionFixture = {
   numItems: 42,
 };
 
+export interface WriteResponseData {
+  isSuccess: boolean;
+  data: unknown[];
+  errors: Record<string, string>;
+}
+
 /**
  * Creates a chainable mock of the Zotero API client.
  *
@@ -40,16 +46,36 @@ export const collectionFixture = {
  *   const { mock, getStub } = createZoteroApiMock(fixtureData);
  *   // fixtureData is what getData() returns
  *   // getStub is the vi.fn() for .get() — you can override it per-test
+ *
+ *   const { mock, getStub, postStub } = createZoteroApiMock(readData, writeData);
+ *   // writeData configures the post() response
  */
-export function createZoteroApiMock(data: unknown = []) {
+export function createZoteroApiMock(
+  data: unknown = [],
+  writeData?: WriteResponseData
+) {
   const getStub = vi.fn().mockResolvedValue({
     getData: () => data,
+  });
+
+  const defaultWriteData: WriteResponseData = writeData ?? {
+    isSuccess: true,
+    data: Array.isArray(data) ? data : [data],
+    errors: {},
+  };
+
+  const postStub = vi.fn().mockResolvedValue({
+    isSuccess: () => defaultWriteData.isSuccess,
+    getData: () => defaultWriteData.data,
+    getErrors: () => defaultWriteData.errors,
+    getEntityByIndex: (index: number) => defaultWriteData.data[index],
   });
 
   const chainable: Record<string, unknown> = {};
   const handler: ProxyHandler<Record<string, unknown>> = {
     get(_target, prop) {
       if (prop === "get") return getStub;
+      if (prop === "post") return postStub;
       // All other methods return the proxy itself (chainable)
       return (..._args: unknown[]) => new Proxy(chainable, handler);
     },
@@ -57,5 +83,5 @@ export function createZoteroApiMock(data: unknown = []) {
 
   const mock = new Proxy(chainable, handler);
 
-  return { mock, getStub };
+  return { mock, getStub, postStub };
 }

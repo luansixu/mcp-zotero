@@ -54,11 +54,19 @@ declare module "zotero-api-client/lib/main-node.cjs" {
     getData(): ZoteroItem | ZoteroItem[];
   }
 
+  interface ZoteroWriteResponse {
+    isSuccess(): boolean;
+    getData(): ZoteroItem[];
+    getErrors(): Record<string, string>;
+    getEntityByIndex(index: number): ZoteroItem;
+  }
+
   interface ZoteroClient {
     library(type: string, id: string): ZoteroClient;
     collections(key?: string): ZoteroClient;
     items(key?: string): ZoteroClient;
     get(params?: Record<string, unknown>): Promise<ZoteroResponse>;
+    post(data: unknown[], opts?: Record<string, unknown>): Promise<ZoteroWriteResponse>;
   }
 
   function api(apiKey: string): ZoteroClient;
