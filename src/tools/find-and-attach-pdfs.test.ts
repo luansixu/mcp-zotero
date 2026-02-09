@@ -358,7 +358,7 @@ describe("find_and_attach_pdfs handler", () => {
     // Primary fails
     vi.mocked(downloadAndUploadPdf).mockResolvedValueOnce({
       success: false,
-      error: "Download failed",
+      error: { code: "download_failed", message: "Download failed", status: 500 },
     });
     // Fallback succeeds
     vi.mocked(downloadAndUploadPdf).mockResolvedValueOnce({

@@ -1428,7 +1428,7 @@ describe("import_pdf_to_zotero", () => {
   it("returns error when download fails", async () => {
     await mockUploader({
       success: false,
-      error: "Failed to download file from URL (status 403)",
+      error: { code: "download_failed", message: "Failed to download file from URL (status 403)", status: 403 },
     });
 
     const { mock } = createZoteroApiMock([]);
@@ -1447,7 +1447,7 @@ describe("import_pdf_to_zotero", () => {
   it("returns error when file exceeds 100 MB", async () => {
     await mockUploader({
       success: false,
-      error: "File exceeds 100 MB limit (105906176 bytes)",
+      error: { code: "file_too_large", message: "File exceeds 100 MB limit (105906176 bytes)", sizeBytes: 105906176 },
     });
 
     const { mock } = createZoteroApiMock([]);
@@ -1466,7 +1466,7 @@ describe("import_pdf_to_zotero", () => {
   it("returns error when upload authorization fails", async () => {
     await mockUploader({
       success: false,
-      error: "Upload authorization failed (status 403)",
+      error: { code: "auth_failed", message: "Upload authorization failed (status 403)", status: 403 },
     });
 
     const { mock } = createZoteroApiMock([]);
@@ -1485,7 +1485,7 @@ describe("import_pdf_to_zotero", () => {
   it("returns descriptive error when download fetch throws (network error)", async () => {
     await mockUploader({
       success: false,
-      error: "Network error downloading file: fetch failed. The server may be blocking automated requests.",
+      error: { code: "network_error", message: "Network error downloading file: fetch failed.", networkDetail: "fetch failed" },
     });
 
     const { mock } = createZoteroApiMock([]);

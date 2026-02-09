@@ -65,55 +65,46 @@ export async function handleImportPdfToZotero(
     });
 
     if (!result.success) {
-      // Map specific error messages to the original error format for backward compatibility
-      const errorMsg = result.error ?? "Unknown error";
-      if (errorMsg.startsWith("Network error downloading file")) {
-        return formatErrorResponse("Network error downloading file", {
-          url,
-          details: errorMsg.replace("Network error downloading file: ", "").split(". ")[0],
-          suggestion:
-            "The server may be blocking automated requests, the URL may redirect to an HTML page, or it may require authentication. Try a direct PDF link from another source (e.g. PubMed Central, Sci-Hub, or the publisher's direct PDF endpoint).",
-        });
+      switch (result.error.code) {
+        case "network_error":
+          return formatErrorResponse("Network error downloading file", {
+            url,
+            details: result.error.networkDetail,
+            suggestion:
+              "The server may be blocking automated requests, the URL may redirect to an HTML page, or it may require authentication. Try a direct PDF link from another source (e.g. PubMed Central, Sci-Hub, or the publisher's direct PDF endpoint).",
+          });
+        case "download_failed":
+          return formatErrorResponse("Failed to download file from URL", {
+            url,
+            status: result.error.status,
+          });
+        case "file_too_large":
+          return formatErrorResponse("File exceeds 100 MB limit", {
+            size_bytes: result.error.sizeBytes,
+          });
+        case "auth_failed":
+          return formatErrorResponse("Upload authorization failed", {
+            status: result.error.status,
+          });
+        case "upload_failed":
+          return formatErrorResponse("File upload failed", {
+            status: result.error.status,
+          });
+        case "not_pdf":
+          return formatErrorResponse("Downloaded file is not a valid PDF", {
+            url,
+            details: result.error.message,
+            suggestion: "The URL may redirect to an HTML page or require browser access. Try a direct PDF link.",
+          });
+        case "registration_failed":
+          return formatErrorResponse("Upload registration failed", {
+            status: result.error.status,
+          });
+        case "item_creation_failed":
+          return formatErrorResponse("import_pdf_to_zotero failed", {
+            details: result.error.message,
+          });
       }
-      if (errorMsg.includes("Failed to download file from URL")) {
-        const statusMatch = errorMsg.match(/status (\d+)/);
-        return formatErrorResponse("Failed to download file from URL", {
-          url,
-          status: statusMatch ? Number(statusMatch[1]) : undefined,
-        });
-      }
-      if (errorMsg.includes("exceeds 100 MB limit")) {
-        const sizeMatch = errorMsg.match(/\((\d+) bytes\)/);
-        return formatErrorResponse("File exceeds 100 MB limit", {
-          size_bytes: sizeMatch ? Number(sizeMatch[1]) : undefined,
-        });
-      }
-      if (errorMsg.includes("Upload authorization failed")) {
-        const statusMatch = errorMsg.match(/status (\d+)/);
-        return formatErrorResponse("Upload authorization failed", {
-          status: statusMatch ? Number(statusMatch[1]) : undefined,
-        });
-      }
-      if (errorMsg.includes("File upload failed")) {
-        const statusMatch = errorMsg.match(/status (\d+)/);
-        return formatErrorResponse("File upload failed", {
-          status: statusMatch ? Number(statusMatch[1]) : undefined,
-        });
-      }
-      if (errorMsg.includes("not a valid PDF") || errorMsg.includes("HTML page instead of a PDF")) {
-        return formatErrorResponse("Downloaded file is not a valid PDF", {
-          url,
-          details: errorMsg,
-          suggestion: "The URL may redirect to an HTML page or require browser access. Try a direct PDF link.",
-        });
-      }
-      if (errorMsg.includes("Upload registration failed")) {
-        const statusMatch = errorMsg.match(/status (\d+)/);
-        return formatErrorResponse("Upload registration failed", {
-          status: statusMatch ? Number(statusMatch[1]) : undefined,
-        });
-      }
-      return formatErrorResponse("import_pdf_to_zotero failed", { details: errorMsg });
     }
 
     return {

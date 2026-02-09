@@ -92,7 +92,7 @@ async function attachPdfsToItems(
         doi: item.doi,
         pdf_attached: uploadResult.success,
         source: oaResult.source,
-        error: uploadResult.success ? undefined : uploadResult.error,
+        error: uploadResult.success ? undefined : uploadResult.error.message,
       };
     }
     return {

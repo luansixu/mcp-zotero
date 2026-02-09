@@ -109,7 +109,10 @@ describe("downloadAndUploadPdf", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("Network error downloading file");
+    if (!result.success) {
+      expect(result.error.code).toBe("network_error");
+      expect(result.error.networkDetail).toBe("fetch failed");
+    }
   });
 
   it("returns error when download returns non-200", async () => {
@@ -124,8 +127,10 @@ describe("downloadAndUploadPdf", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("Failed to download file from URL");
-    expect(result.error).toContain("403");
+    if (!result.success) {
+      expect(result.error.code).toBe("download_failed");
+      expect(result.error.status).toBe(403);
+    }
   });
 
   it("returns error when upload authorization fails", async () => {
@@ -154,7 +159,10 @@ describe("downloadAndUploadPdf", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("Upload authorization failed");
+    if (!result.success) {
+      expect(result.error.code).toBe("auth_failed");
+      expect(result.error.status).toBe(403);
+    }
   });
 
   it("skips upload when file already exists", async () => {
@@ -242,8 +250,11 @@ describe("downloadAndUploadPdf", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("HTML page instead of a PDF");
-    expect(result.error).toContain("text/html");
+    if (!result.success) {
+      expect(result.error.code).toBe("not_pdf");
+      expect(result.error.message).toContain("HTML page instead of a PDF");
+      expect(result.error.detectedContentType).toBe("text/html");
+    }
   });
 
   it("returns error when downloaded file is not a valid PDF", async () => {
@@ -267,8 +278,11 @@ describe("downloadAndUploadPdf", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("not a valid PDF");
-    expect(result.error).toContain("missing %PDF- header");
+    if (!result.success) {
+      expect(result.error.code).toBe("not_pdf");
+      expect(result.error.message).toContain("not a valid PDF");
+      expect(result.error.message).toContain("missing %PDF- header");
+    }
   });
 
   it("sends User-Agent header in download request", async () => {

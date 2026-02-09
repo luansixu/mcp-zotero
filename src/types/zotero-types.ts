@@ -108,9 +108,13 @@ export interface ZoteroApi {
 }
 
 export interface ZoteroApiError extends Error {
-  response?: { status: number; url?: string };
+  response: { status: number; url?: string };
 }
 
 export function isZoteroApiError(err: unknown): err is ZoteroApiError {
-  return err instanceof Error;
+  if (!(err instanceof Error)) return false;
+  const rec = err as unknown as Record<string, unknown>;
+  if (typeof rec.response !== "object" || rec.response === null) return false;
+  const resp = rec.response as Record<string, unknown>;
+  return typeof resp.status === "number";
 }

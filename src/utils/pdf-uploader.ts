@@ -24,15 +24,41 @@ export interface PdfUploadOptions {
   contentType?: string;
 }
 
-export interface PdfUploadResult {
-  success: boolean;
-  itemKey?: string;
-  filename?: string;
+export type PdfUploadErrorCode =
+  | "network_error"
+  | "download_failed"
+  | "not_pdf"
+  | "file_too_large"
+  | "item_creation_failed"
+  | "auth_failed"
+  | "upload_failed"
+  | "registration_failed";
+
+export interface PdfUploadError {
+  code: PdfUploadErrorCode;
+  message: string;
+  status?: number;
   sizeBytes?: number;
-  fulltextIndexed?: boolean;
-  fulltextStatus?: string;
-  error?: string;
+  detectedContentType?: string;
+  networkDetail?: string;
 }
+
+export interface PdfUploadSuccess {
+  success: true;
+  itemKey: string;
+  filename: string;
+  sizeBytes: number;
+  fulltextIndexed: boolean;
+  fulltextStatus: string;
+}
+
+export interface PdfUploadFailure {
+  success: false;
+  error: PdfUploadError;
+  itemKey?: string;
+}
+
+export type PdfUploadResult = PdfUploadSuccess | PdfUploadFailure;
 
 function extractFilename(url: string): string {
   try {
@@ -73,14 +99,22 @@ export async function downloadAndUploadPdf(
     const detail = err instanceof Error ? err.message : String(err);
     return {
       success: false,
-      error: `Network error downloading file: ${detail}. The server may be blocking automated requests, the URL may redirect to an HTML page, or it may require authentication.`,
+      error: {
+        code: "network_error",
+        message: `Network error downloading file: ${detail}. The server may be blocking automated requests, the URL may redirect to an HTML page, or it may require authentication.`,
+        networkDetail: detail,
+      },
     };
   }
 
   if (!downloadResponse.ok) {
     return {
       success: false,
-      error: `Failed to download file from URL (status ${downloadResponse.status})`,
+      error: {
+        code: "download_failed",
+        message: `Failed to download file from URL (status ${downloadResponse.status})`,
+        status: downloadResponse.status,
+      },
     };
   }
 
@@ -103,9 +137,13 @@ export async function downloadAndUploadPdf(
     const looksHtml = preview.toLowerCase().includes("<html") || preview.toLowerCase().includes("<!doctype");
     return {
       success: false,
-      error: looksHtml
-        ? `The server returned an HTML page instead of a PDF (Content-Type: ${detectedContentType}). The URL may require browser access, authentication, or redirect to a landing page.`
-        : `Downloaded file is not a valid PDF (Content-Type: ${detectedContentType}, missing %PDF- header). The URL may not point to a direct PDF download.`,
+      error: {
+        code: "not_pdf",
+        message: looksHtml
+          ? `The server returned an HTML page instead of a PDF (Content-Type: ${detectedContentType}). The URL may require browser access, authentication, or redirect to a landing page.`
+          : `Downloaded file is not a valid PDF (Content-Type: ${detectedContentType}, missing %PDF- header). The URL may not point to a direct PDF download.`,
+        detectedContentType,
+      },
     };
   }
 
@@ -113,7 +151,11 @@ export async function downloadAndUploadPdf(
   if (buffer.length > MAX_FILE_SIZE) {
     return {
       success: false,
-      error: `File exceeds 100 MB limit (${buffer.length} bytes)`,
+      error: {
+        code: "file_too_large",
+        message: `File exceeds 100 MB limit (${buffer.length} bytes)`,
+        sizeBytes: buffer.length,
+      },
     };
   }
 
@@ -148,7 +190,10 @@ export async function downloadAndUploadPdf(
     const errorMsg = Object.values(errors).join("; ") || "Unknown error";
     return {
       success: false,
-      error: `Failed to create attachment item: ${errorMsg}`,
+      error: {
+        code: "item_creation_failed",
+        message: `Failed to create attachment item: ${errorMsg}`,
+      },
     };
   }
 
@@ -178,7 +223,11 @@ export async function downloadAndUploadPdf(
     return {
       success: false,
       itemKey,
-      error: `Upload authorization failed (status ${authResponse.status})`,
+      error: {
+        code: "auth_failed",
+        message: `Upload authorization failed (status ${authResponse.status})`,
+        status: authResponse.status,
+      },
     };
   }
 
@@ -202,7 +251,11 @@ export async function downloadAndUploadPdf(
       return {
         success: false,
         itemKey,
-        error: `File upload failed (status ${uploadResponse.status})`,
+        error: {
+          code: "upload_failed",
+          message: `File upload failed (status ${uploadResponse.status})`,
+          status: uploadResponse.status,
+        },
       };
     }
 
@@ -220,7 +273,11 @@ export async function downloadAndUploadPdf(
       return {
         success: false,
         itemKey,
-        error: `Upload registration failed (status ${registerResponse.status})`,
+        error: {
+          code: "registration_failed",
+          message: `Upload registration failed (status ${registerResponse.status})`,
+          status: registerResponse.status,
+        },
       };
     }
   }
