@@ -376,6 +376,130 @@ describe("injectCitations", () => {
     expect(writtenXml).toContain("ADDIN ZOTERO_ITEM");
   });
 
+  it("handles attributes in non-standard order (num before keys)", async () => {
+    const xml = [
+      "<w:body>",
+      '<w:p><w:r><w:t>&lt;zcite num=&quot;1&quot; keys=&quot;ABC001&quot;/&gt;</w:t></w:r></w:p>',
+      "</w:body>",
+    ].join("");
+
+    const zipMock = await setupJsZipMock(xml);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
+    const api = createMockZoteroApi(getStub);
+
+    const result = await injectCitations(
+      "/tmp/test.docx",
+      api,
+      TEST_USER_ID,
+      "ieee"
+    );
+
+    expect(result.found).toBe(1);
+    expect(result.injected).toBe(1);
+
+    const writeCall = zipMock.file.mock.calls.find(
+      (c: unknown[]) => c[0] === "word/document.xml" && c.length === 2
+    );
+    const writtenXml = writeCall![1] as string;
+    expect(writtenXml).toContain("[1]");
+    expect(writtenXml).toContain("ADDIN ZOTERO_ITEM");
+  });
+
+  it("handles XML entity in attribute value (&amp; in locator)", async () => {
+    // In .docx XML, a zcite with locator "pp. 12 & 15" would appear as:
+    // &lt;zcite keys=&quot;ABC001&quot; locator=&quot;pp. 12 &amp;amp; 15&quot;/&gt;
+    // (double-escaped: &amp; in XML attribute, then the whole tag is entity-escaped in w:t)
+    const xml = [
+      "<w:body>",
+      '<w:p><w:r><w:t>&lt;zcite keys=&quot;ABC001&quot; locator=&quot;pp. 12 &amp;amp; 15&quot;/&gt;</w:t></w:r></w:p>',
+      "</w:body>",
+    ].join("");
+
+    const zipMock = await setupJsZipMock(xml);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
+    const api = createMockZoteroApi(getStub);
+
+    const result = await injectCitations(
+      "/tmp/test.docx",
+      api,
+      TEST_USER_ID,
+      "apa"
+    );
+
+    expect(result.found).toBe(1);
+    expect(result.injected).toBe(1);
+
+    const writeCall = zipMock.file.mock.calls.find(
+      (c: unknown[]) => c[0] === "word/document.xml" && c.length === 2
+    );
+    const writtenXml = writeCall![1] as string;
+    // The locator value "pp. 12 & 15" appears inside JSON in w:instrText,
+    // where & is XML-escaped to &amp;
+    expect(writtenXml).toContain("pp. 12 &amp; 15");
+  });
+
+  it("handles all attributes in arbitrary order", async () => {
+    const xml = [
+      "<w:body>",
+      '<w:p><w:r><w:t>&lt;zcite suffix=&quot;, emphasis&quot; num=&quot;3&quot; prefix=&quot;see &quot; locator=&quot;p. 5&quot; keys=&quot;ABC001&quot;/&gt;</w:t></w:r></w:p>',
+      "</w:body>",
+    ].join("");
+
+    const zipMock = await setupJsZipMock(xml);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
+    const api = createMockZoteroApi(getStub);
+
+    const result = await injectCitations(
+      "/tmp/test.docx",
+      api,
+      TEST_USER_ID,
+      "ieee"
+    );
+
+    expect(result.found).toBe(1);
+    expect(result.injected).toBe(1);
+
+    const writeCall = zipMock.file.mock.calls.find(
+      (c: unknown[]) => c[0] === "word/document.xml" && c.length === 2
+    );
+    const writtenXml = writeCall![1] as string;
+    expect(writtenXml).toContain("[3]");
+    expect(writtenXml).toContain("see ");
+    expect(writtenXml).toContain("emphasis");
+    expect(writtenXml).toContain("p. 5");
+  });
+
+  it("handles zcite split across runs (integration)", async () => {
+    const xml = [
+      "<w:body>",
+      "<w:p>",
+      '<w:r><w:rPr><w:lang w:val="en-US"/></w:rPr><w:t>&lt;zcite keys=&quot;AB</w:t></w:r>',
+      '<w:r><w:rPr><w:lang w:val="it-IT"/></w:rPr><w:t>C001&quot;/&gt;</w:t></w:r>',
+      "</w:p>",
+      "</w:body>",
+    ].join("");
+
+    const zipMock = await setupJsZipMock(xml);
+    const getStub = vi.fn().mockResolvedValue(defaultZoteroData);
+    const api = createMockZoteroApi(getStub);
+
+    const result = await injectCitations(
+      "/tmp/test.docx",
+      api,
+      TEST_USER_ID,
+      "apa"
+    );
+
+    expect(result.found).toBe(1);
+    expect(result.injected).toBe(1);
+
+    const writeCall = zipMock.file.mock.calls.find(
+      (c: unknown[]) => c[0] === "word/document.xml" && c.length === 2
+    );
+    const writtenXml = writeCall![1] as string;
+    expect(writtenXml).toContain("ADDIN ZOTERO_ITEM");
+  });
+
   it("throws on invalid docx (no word/document.xml)", async () => {
     const JSZip = (await import("jszip")).default;
     vi.mocked(JSZip.loadAsync).mockResolvedValueOnce({
