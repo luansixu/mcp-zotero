@@ -1,20 +1,8 @@
 import { z } from "zod";
-import { createHash } from "node:crypto";
 import { ZoteroApiInterface, isZoteroApiError } from "../types/zotero-types.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import { logger } from "../utils/logger.js";
-import { extractPdfText } from "../utils/pdf-text-extractor.js";
-import { putFulltext } from "../utils/zotero-fulltext.js";
-
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
-
-interface UploadAuthResponse {
-  url: string;
-  contentType: string;
-  prefix: string;
-  suffix: string;
-  uploadKey: string;
-}
+import { downloadAndUploadPdf } from "../utils/pdf-uploader.js";
 
 export const toolConfig = {
   name: "import_pdf_to_zotero",
@@ -57,7 +45,7 @@ export async function handleImportPdfToZotero(
   userId: string,
   args: Record<string, unknown>
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-  const { url, filename: filenameArg, title, content_type, parent_item, collections, tags } =
+  const { url, filename, title, content_type, parent_item, collections, tags } =
     ImportPdfSchema.parse(args);
 
   const apiKey = process.env.ZOTERO_API_KEY;
@@ -66,156 +54,59 @@ export async function handleImportPdfToZotero(
   }
 
   try {
-    // 1. Download the file
-    let downloadResponse: Response;
-    try {
-      downloadResponse = await fetch(url);
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      return formatErrorResponse("Network error downloading file", {
-        url,
-        details: detail,
-        suggestion:
-          "The server may be blocking automated requests, the URL may redirect to an HTML page, or it may require authentication. Try a direct PDF link from another source (e.g. PubMed Central, Sci-Hub, or the publisher's direct PDF endpoint).",
-      });
-    }
-    if (!downloadResponse.ok) {
-      return formatErrorResponse("Failed to download file from URL", {
-        url,
-        status: downloadResponse.status,
-      });
-    }
-
-    const arrayBuffer = await downloadResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    if (buffer.length > MAX_FILE_SIZE) {
-      return formatErrorResponse("File exceeds 100 MB limit", {
-        size_bytes: buffer.length,
-      });
-    }
-
-    // 2. Compute md5 and derive filename
-    const md5 = createHash("md5").update(buffer).digest("hex");
-    const filename = filenameArg ?? extractFilename(url);
-
-    // 3. Create attachment item via Zotero API
-    const itemData: Record<string, unknown> = {
-      itemType: "attachment",
-      linkMode: "imported_url",
-      title: title ?? filename,
+    const result = await downloadAndUploadPdf(zoteroApi, userId, apiKey, {
       url,
+      parentItem: parent_item,
+      collections,
+      tags,
+      filename,
+      title,
       contentType: content_type,
-      filename,
-      tags: tags?.map((t) => ({ tag: t })) ?? [],
-    };
-
-    if (parent_item) {
-      itemData.parentItem = parent_item;
-      itemData.collections = [];
-    } else {
-      itemData.collections = collections ?? [];
-    }
-
-    const createResponse = await zoteroApi
-      .library("user", userId)
-      .items()
-      .post([itemData]);
-
-    if (!createResponse.isSuccess()) {
-      const errors = createResponse.getErrors();
-      const errorMsg = Object.values(errors).join("; ") || "Unknown error";
-      return formatErrorResponse("Failed to create attachment item", {
-        details: errorMsg,
-      });
-    }
-
-    const created = createResponse.getData();
-    const itemKey = created[0].key as string;
-
-    // 4. Upload authorization
-    const authUrl = `https://api.zotero.org/users/${userId}/items/${itemKey}/file`;
-    const authBody = new URLSearchParams({
-      md5,
-      filename,
-      filesize: String(buffer.length),
-      mtime: String(Date.now()),
     });
 
-    const authResponse = await fetch(authUrl, {
-      method: "POST",
-      headers: {
-        "Zotero-API-Key": apiKey,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "If-None-Match": "*",
-      },
-      body: authBody.toString(),
-    });
-
-    if (!authResponse.ok) {
-      return formatErrorResponse("Upload authorization failed", {
-        status: authResponse.status,
-      });
-    }
-
-    const authData = (await authResponse.json()) as UploadAuthResponse | { exists: 1 };
-
-    // 5-6. Upload binary + register (skip if already exists)
-    if (!("exists" in authData)) {
-      const auth = authData as UploadAuthResponse;
-
-      // Binary upload
-      const prefix = Buffer.from(auth.prefix, "utf-8");
-      const suffix = Buffer.from(auth.suffix, "utf-8");
-      const uploadBody = Buffer.concat([prefix, buffer, suffix]);
-
-      const uploadResponse = await fetch(auth.url, {
-        method: "POST",
-        headers: { "Content-Type": auth.contentType },
-        body: uploadBody,
-      });
-
-      if (!uploadResponse.ok) {
+    if (!result.success) {
+      // Map specific error messages to the original error format for backward compatibility
+      const errorMsg = result.error ?? "Unknown error";
+      if (errorMsg.startsWith("Network error downloading file")) {
+        return formatErrorResponse("Network error downloading file", {
+          url,
+          details: errorMsg.replace("Network error downloading file: ", "").split(". ")[0],
+          suggestion:
+            "The server may be blocking automated requests, the URL may redirect to an HTML page, or it may require authentication. Try a direct PDF link from another source (e.g. PubMed Central, Sci-Hub, or the publisher's direct PDF endpoint).",
+        });
+      }
+      if (errorMsg.includes("Failed to download file from URL")) {
+        const statusMatch = errorMsg.match(/status (\d+)/);
+        return formatErrorResponse("Failed to download file from URL", {
+          url,
+          status: statusMatch ? Number(statusMatch[1]) : undefined,
+        });
+      }
+      if (errorMsg.includes("exceeds 100 MB limit")) {
+        const sizeMatch = errorMsg.match(/\((\d+) bytes\)/);
+        return formatErrorResponse("File exceeds 100 MB limit", {
+          size_bytes: sizeMatch ? Number(sizeMatch[1]) : undefined,
+        });
+      }
+      if (errorMsg.includes("Upload authorization failed")) {
+        const statusMatch = errorMsg.match(/status (\d+)/);
+        return formatErrorResponse("Upload authorization failed", {
+          status: statusMatch ? Number(statusMatch[1]) : undefined,
+        });
+      }
+      if (errorMsg.includes("File upload failed")) {
+        const statusMatch = errorMsg.match(/status (\d+)/);
         return formatErrorResponse("File upload failed", {
-          status: uploadResponse.status,
+          status: statusMatch ? Number(statusMatch[1]) : undefined,
         });
       }
-
-      // Register upload
-      const registerResponse = await fetch(authUrl, {
-        method: "POST",
-        headers: {
-          "Zotero-API-Key": apiKey,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "If-None-Match": "*",
-        },
-        body: `upload=${auth.uploadKey}`,
-      });
-
-      if (!registerResponse.ok) {
+      if (errorMsg.includes("Upload registration failed")) {
+        const statusMatch = errorMsg.match(/status (\d+)/);
         return formatErrorResponse("Upload registration failed", {
-          status: registerResponse.status,
+          status: statusMatch ? Number(statusMatch[1]) : undefined,
         });
       }
-    }
-
-    // 7. Extract text and index fulltext
-    let fulltextIndexed = false;
-    let fulltextStatus: string;
-
-    if (content_type === "application/pdf") {
-      try {
-        const { text, totalPages } = await extractPdfText(buffer);
-        const putResult = await putFulltext(userId, itemKey, apiKey, text, totalPages);
-        fulltextIndexed = putResult.success;
-        fulltextStatus = putResult.success
-          ? "Fulltext indexed successfully. Use get_item_fulltext to retrieve content."
-          : `Fulltext PUT failed: ${putResult.error}. Sync with Zotero Desktop to index the PDF.`;
-      } catch {
-        fulltextStatus = "PDF text extraction failed. Sync with Zotero Desktop to index the PDF.";
-      }
-    } else {
-      fulltextStatus = "Non-PDF content type, fulltext extraction skipped.";
+      return formatErrorResponse("import_pdf_to_zotero failed", { details: errorMsg });
     }
 
     return {
@@ -224,15 +115,15 @@ export async function handleImportPdfToZotero(
           type: "text",
           text: JSON.stringify(
             {
-              item_key: itemKey,
-              filename,
-              title: title ?? filename,
+              item_key: result.itemKey,
+              filename: result.filename,
+              title: title ?? result.filename,
               url,
               parent_item: parent_item ?? null,
-              size_bytes: buffer.length,
+              size_bytes: result.sizeBytes,
               link_mode: "imported_url",
-              fulltext_indexed: fulltextIndexed,
-              fulltext_status: fulltextStatus,
+              fulltext_indexed: result.fulltextIndexed,
+              fulltext_status: result.fulltextStatus,
             },
             null,
             2
@@ -254,17 +145,4 @@ export async function handleImportPdfToZotero(
       details: message,
     });
   }
-}
-
-function extractFilename(url: string): string {
-  try {
-    const pathname = new URL(url).pathname;
-    const basename = pathname.split("/").pop();
-    if (basename && basename.includes(".")) {
-      return decodeURIComponent(basename);
-    }
-  } catch {
-    // fall through
-  }
-  return "document.pdf";
 }

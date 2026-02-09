@@ -1,7 +1,7 @@
 {
   "name": "mcp-zotero",
   "type": "module",
-  "version": "1.0.6",
+  "version": "1.0.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/Xevos117/mcp-zotero"

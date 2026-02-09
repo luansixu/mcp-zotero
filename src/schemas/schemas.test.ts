@@ -10,8 +10,10 @@ import { toolConfig as getItemFulltextConfig } from "../tools/get-item-fulltext.
 import { toolConfig as addLinkedUrlAttachmentConfig } from "../tools/add-linked-url-attachment.js";
 import { toolConfig as addWebItemConfig } from "../tools/add-web-item.js";
 import { toolConfig as importPdfToZoteroConfig } from "../tools/import-pdf-to-zotero.js";
+import { toolConfig as findAndAttachPdfsConfig } from "../tools/find-and-attach-pdfs.js";
 
 const GetCollectionItemsSchema = z.object(collectionItemsConfig.inputSchema);
+const FindAndAttachPdfsSchema = z.object(findAndAttachPdfsConfig.inputSchema);
 const GetItemsDetailsSchema = z.object(itemsDetailsConfig.inputSchema);
 const SearchLibrarySchema = z.object(searchConfig.inputSchema);
 const CreateCollectionSchema = z.object(createCollectionConfig.inputSchema);
@@ -180,6 +182,21 @@ describe("AddItemsByDoiSchema", () => {
     });
     expect(result.collection_key).toBe("COL001");
     expect(result.tags).toEqual(["ai", "nlp"]);
+  });
+
+  it("defaults auto_attach_pdf to true", () => {
+    const result = AddItemsByDoiSchema.parse({
+      dois: ["10.1234/test"],
+    });
+    expect(result.auto_attach_pdf).toBe(true);
+  });
+
+  it("accepts auto_attach_pdf as false", () => {
+    const result = AddItemsByDoiSchema.parse({
+      dois: ["10.1234/test"],
+      auto_attach_pdf: false,
+    });
+    expect(result.auto_attach_pdf).toBe(false);
   });
 });
 
@@ -386,5 +403,43 @@ describe("ImportPdfToZoteroSchema", () => {
     expect(result.parent_item).toBe("PARENT01");
     expect(result.collections).toEqual(["COL001"]);
     expect(result.tags).toEqual(["ai", "nlp"]);
+  });
+});
+
+describe("FindAndAttachPdfsSchema", () => {
+  it("accepts item_keys array", () => {
+    const result = FindAndAttachPdfsSchema.parse({ item_keys: ["KEY1", "KEY2"] });
+    expect(result.item_keys).toEqual(["KEY1", "KEY2"]);
+  });
+
+  it("accepts collection_key string", () => {
+    const result = FindAndAttachPdfsSchema.parse({ collection_key: "COL001" });
+    expect(result.collection_key).toBe("COL001");
+  });
+
+  it("accepts empty args (validation of mutual exclusion is in handler)", () => {
+    const result = FindAndAttachPdfsSchema.parse({});
+    expect(result.item_keys).toBeUndefined();
+    expect(result.collection_key).toBeUndefined();
+  });
+
+  it("defaults skip_if_attachment_exists to true", () => {
+    const result = FindAndAttachPdfsSchema.parse({ item_keys: ["KEY1"] });
+    expect(result.skip_if_attachment_exists).toBe(true);
+  });
+
+  it("defaults dry_run to false", () => {
+    const result = FindAndAttachPdfsSchema.parse({ item_keys: ["KEY1"] });
+    expect(result.dry_run).toBe(false);
+  });
+
+  it("accepts all params together", () => {
+    const result = FindAndAttachPdfsSchema.parse({
+      item_keys: ["KEY1"],
+      skip_if_attachment_exists: false,
+      dry_run: true,
+    });
+    expect(result.skip_if_attachment_exists).toBe(false);
+    expect(result.dry_run).toBe(true);
   });
 });

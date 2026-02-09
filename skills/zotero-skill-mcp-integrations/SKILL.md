@@ -13,7 +13,7 @@ Inject Zotero field codes into a .docx document entirely within Claude's sandbox
 - User wants a Word document with live, Zotero-manageable bibliography
 - Any .docx generation that references papers in the user's Zotero library
 
-> **Writing a scientific article?** This skill handles citation *injection* — the technical step that turns placeholders into Zotero field codes. It does NOT replace the research workflow. If you are writing an academic paper, follow the `scientific-writing` skill (`scientific-writing/SKILL.md`) **first**: it enforces full-text reading before citing, source triage, and evidence-based writing. Come back here only at Phase 5 (Deliver) to inject the citations.
+> **Writing a scientific article?** This skill handles citation *injection* — the technical step that turns placeholders into Zotero field codes. It does NOT replace the research workflow. If you are writing an academic paper, follow the `scientific-writing` skill (`scientific-writing/SKILL.md`) **first**: it handles source triage, evidence-based writing, and source transparency. Come back here only at Phase 5 (Deliver) to inject the citations.
 
 ## Fallback — if this skill is NOT available
 
@@ -49,75 +49,64 @@ The script has a built-in fallback: if the ESM import fails, it tries `createReq
 
 ### Step 2 — Search / add papers
 
-> **Document access:** If you cannot access or retrieve a document from the internet (e.g., behind a paywall, blocked URL, PDF not available), inform the user and ask them to provide the document content directly in the chat. The user can paste text, upload a PDF, or provide the relevant excerpts. For paywalled journals, the abstract is acceptable for specific factual claims — see Step 2b for details. Available PDFs **must** still be uploaded to Zotero.
+> **Document access:** If you cannot access or retrieve a document from the internet (e.g., behind a paywall, blocked URL, PDF not available), the abstract is a perfectly valid source for the claims it contains. See Step 2b for the transparency and PDF upload policies.
 
 Use MCP tools to find or add papers:
 - `search_library` — search existing Zotero library
 - `add_items_by_doi` — add new papers by DOI, returns item keys
 - `get_collections` / `get_collection_items` — browse collections
+- `find_and_attach_pdfs` — batch lookup and attach OA PDFs for items (by keys or collection)
 
 Note every `item_key` returned — these are needed for citations.
 
-### Step 2b — Import PDFs and read sources
+### Step 2b — Source transparency and PDF upload
 
-> **HARD GATE — VERIFY THEN UPLOAD: MANDATORY FOR EVERY AVAILABLE PDF**
+#### Using abstracts
+
+Abstracts are a perfectly valid source. If the abstract contains the information
+you need (quantitative results, study design, sample size, main conclusions),
+there is no obligation to retrieve the full text. This saves context and time.
+
+However, **you MUST be transparent** about which sources you used in full text
+and which you used only via abstract. Before presenting the final document,
+include a brief disclosure, e.g.:
+
+> **Sources used via abstract only:** Smith et al. 2021, Jones et al. 2023.
+> All other sources were read in full.
+
+This lets the user judge the evidence quality themselves.
+
+#### PDF upload policy
+
+PDF upload to Zotero happens **only when the user explicitly requests it**.
+
+> **IF the user explicitly asks to upload/import PDFs to Zotero** → PDF upload is
+> **MANDATORY and cannot be skipped**. For each source:
 >
-> For every source cited in the document, you MUST verify and upload the PDF to Zotero
-> if it is obtainable through ANY free channel (open access, PMC, Europe PMC, preprints,
-> publisher OA). The two steps are inseparable — never upload without verifying first:
+> - **Freely accessible articles** (open access, PMC, preprints): download and
+>   upload via `import_pdf_to_zotero`, following the verify-upload-validate
+>   procedure below.
+> - **Paywalled articles** (Lancet, NEJM, Nature, JAMA, etc.): present a table
+>   to the user listing the paywalled sources and ask them to upload the PDFs
+>   to Zotero if they have institutional access. Example:
 >
-> 1. **VERIFY** — before calling `import_pdf_to_zotero`, read the PDF content via `web_fetch`
->    and confirm: (a) the title matches the expected article, (b) the authors match,
->    (c) the content is the actual paper, not a login page, CAPTCHA, or a different article.
->    Repositories (especially Europe PMC) can serve wrong PDFs for a given accession ID.
-> 2. **UPLOAD** — only after verification passes, call `import_pdf_to_zotero`.
-> 3. **VALIDATE** — after upload, call `get_item_fulltext` and spot-check the first few
->    hundred characters to confirm the indexed content matches the expected paper.
+>   > I could not download PDFs for these paywalled sources:
+>   >
+>   > | Source | Journal | DOI |
+>   > |---|---|---|
+>   > | Smith et al. 2021 | The Lancet | 10.1016/... |
+>   > | Jones et al. 2023 | NEJM | 10.1056/... |
+>   >
+>   > If you have institutional access, please download and upload them to
+>   > Zotero manually. I've already added the bibliographic records.
 >
-> This obligation is unconditional:
-> - It applies even if you already read the content via `web_fetch`
-> - It applies even if the source will only be used for a single claim
-> - It applies even for "abstract-only" paywalled sources IF a preprint or OA version exists
-> - Skipping verification or upload to save time is NOT acceptable
-> - Uploading an unverified PDF pollutes the user's Zotero library — treat it as a bug
->
-> Only after exhausting all free PDF channels (5 attempts) AND failing, fall back to
-> `add_linked_url_attachment`. The user's Zotero library must contain every available PDF,
-> and every uploaded PDF must have been verified.
+> **IF the user does NOT request PDF upload** → do not upload PDFs. Just use
+> the sources (abstract or full text as available) and cite them.
 
-After adding items, import PDFs and read each source **before** using it in the document.
-A citation without reading is just decoration — it doesn't support any claim.
-
-#### Per-source checklist
-
-For **every** source, complete these steps in order before citing it in the document:
-
-- [ ] **Verify PDF** — read the PDF content via `web_fetch` and confirm title, authors, and content match the expected article. NEVER skip this step.
-- [ ] **Import PDF** — only after verification, upload to Zotero via `import_pdf_to_zotero`. If the PDF is freely available, this is **mandatory** even if you've already read the content through other means.
-- [ ] **Validate post-upload** — call `get_item_fulltext` and spot-check the indexed content matches the expected paper.
-- [ ] **Fallback** — if import fails after 5 attempts, attach URL via `add_linked_url_attachment`
-- [ ] **Read full text** — use `get_item_fulltext` or `web_fetch` to read the actual content (not just the abstract)
-- [ ] **Only then cite** — use the source in Step 4 only after you have read and understood it
-
-> **Do NOT skip to Step 4.** A `<zcite>` tag for a source you haven't read produces a technically valid citation but a scientifically useless one.
-
-#### Paywalled sources (Lancet, NEJM, Nature, JAMA, etc.)
-
-For sources behind a paywall where you cannot access the full text:
-
-- **The abstract IS a legitimate source** for specific factual claims: quantitative results, study design, sample size, and the main conclusion as stated by the authors.
-- **Do NOT use abstract-only sources** for interpretive claims, methodological details, or subgroup analyses not mentioned in the abstract.
-- **Mark the source as "abstract-only"** and limit its use accordingly.
-- **If the user has institutional access**, ask them to provide the PDF or paste relevant sections. If they provide it, upload it to Zotero.
-- **PDF archiving is NON-NEGOTIABLE** when the PDF is available through any free channel (open access, PMC, preprint, OA version of a paywalled article). You MUST call `import_pdf_to_zotero`. The softened policy applies ONLY to *citability*, NEVER to the duty to archive. See the hard gate above.
-
-#### Read first, upload after
+#### Verify-upload-validate procedure (when upload is requested)
 
 **NEVER upload a PDF to Zotero without verifying its content first.**
-Repositories (especially Europe PMC) can occasionally serve the wrong PDF for a
-given accession ID. Uploading unverified PDFs pollutes the user's Zotero library.
-
-**Procedure for each source:**
+Repositories (especially Europe PMC) can occasionally serve the wrong PDF.
 
 1. **Find a PDF URL** — try these sources in order:
    - Publisher open access (JMIR, Frontiers, PLOS, BMC, MDPI are fully OA)
@@ -136,26 +125,20 @@ given accession ID. Uploading unverified PDFs pollutes the user's Zotero library
    - `parent_item`: the Zotero item key from Step 2
    - `filename`: descriptive name (e.g., `Author_Year_ShortTitle.pdf`)
 
-4. **Validate post-upload** — if the server supports auto-indexing, call
-   `get_item_fulltext` and spot-check the first few hundred characters to
-   confirm the indexed content matches the expected paper.
+4. **Validate post-upload** — call `get_item_fulltext` and spot-check the first
+   few hundred characters to confirm the indexed content matches the expected paper.
 
-#### Handling import failures (max 5 attempts)
+If import fails after 5 attempts, fall back to `add_linked_url_attachment`.
 
-If `import_pdf_to_zotero` fails, retry with alternative URLs:
+#### Handling green OA (repository copies)
 
-| Attempt | Source | Notes |
-|---|---|---|
-| 1 | Publisher direct PDF | Best quality, but often blocked by bot protection |
-| 2 | Europe PMC | Good for PMC-indexed articles, but verify content |
-| 3 | PubMed Central direct | Sometimes blocked by redirect |
-| 4 | Preprint version | May differ from published version |
-| 5 | Alternative publisher URL | Try different URL patterns for same publisher |
+When `find_and_attach_pdfs` or `add_items_by_doi` reports `oa_status: "green"` with
+a `landing_url` but no PDF was attached, it means the paper is available at a
+repository (e.g., PubMed Central) but Unpaywall has no direct download link.
 
-**After 5 failed attempts**, fall back to `add_linked_url_attachment`:
-- Attach the PDF URL as a linked reference
-- The user can download it manually later
-- This preserves the reference without polluting the library with bad files
+Action: inform the user that a repository copy exists and provide the landing URL.
+If they need the PDF in Zotero, they can download it manually and you can attach it
+with `import_pdf_to_zotero`.
 
 #### Known publisher URL patterns for direct PDF access
 

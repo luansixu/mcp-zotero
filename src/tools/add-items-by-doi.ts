@@ -4,6 +4,8 @@ import { formatErrorResponse } from "../utils/error-formatter.js";
 import { resolveDois } from "../utils/doi-resolver.js";
 import { cslToZoteroItem } from "../utils/csl-to-zotero.js";
 import { logger } from "../utils/logger.js";
+import { lookupOaPdf } from "../utils/unpaywall.js";
+import { downloadAndUploadPdf } from "../utils/pdf-uploader.js";
 
 export const toolConfig = {
   name: "add_items_by_doi",
@@ -28,6 +30,12 @@ If the inject-citations skill is available, Claude can inject citations directly
       .array(z.string())
       .optional()
       .describe("Tags to apply to all added items"),
+    auto_attach_pdf: z
+      .boolean()
+      .default(true)
+      .describe(
+        "Automatically check Unpaywall and attach OA PDFs for added items (default: true)"
+      ),
   },
 } as const;
 
@@ -38,7 +46,7 @@ export async function handleAddItemsByDoi(
   userId: string,
   args: Record<string, unknown>
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-  const { dois, collection_key, tags } = AddItemsByDoiSchema.parse(args);
+  const { dois, collection_key, tags, auto_attach_pdf } = AddItemsByDoiSchema.parse(args);
 
   if (dois.length === 0) {
     return formatErrorResponse("At least one DOI is required");
@@ -72,6 +80,66 @@ export async function handleAddItemsByDoi(
       title: createdItems[i]?.title ?? r.data.title ?? "Untitled",
     }));
 
+    // Auto-attach OA PDFs if enabled
+    interface PdfAttachResult {
+      item_key: string;
+      doi: string;
+      pdf_attached: boolean;
+      source: string | null;
+      oa_status?: string;
+      landing_url?: string;
+      error?: string;
+    }
+    let pdf_results: PdfAttachResult[] | undefined;
+
+    if (auto_attach_pdf) {
+      const apiKey = process.env.ZOTERO_API_KEY;
+      if (apiKey) {
+        pdf_results = [];
+        for (const item of success) {
+          if (!item.doi) continue;
+          const oaResult = await lookupOaPdf(item.doi);
+          if (oaResult.warning) {
+            // Email not configured — skip all remaining items
+            pdf_results.push({
+              item_key: item.item_key,
+              doi: item.doi,
+              pdf_attached: false,
+              source: null,
+              error: oaResult.warning,
+            });
+            break;
+          }
+          if (oaResult.found && oaResult.pdf_url) {
+            const uploadResult = await downloadAndUploadPdf(zoteroApi, userId, apiKey, {
+              url: oaResult.pdf_url,
+              parentItem: item.item_key,
+            });
+            pdf_results.push({
+              item_key: item.item_key,
+              doi: item.doi,
+              pdf_attached: uploadResult.success,
+              source: oaResult.source,
+              error: uploadResult.success ? undefined : uploadResult.error,
+            });
+          } else {
+            // No PDF URL available — report outcome for every DOI
+            pdf_results.push({
+              item_key: item.item_key,
+              doi: item.doi,
+              pdf_attached: false,
+              source: null,
+              oa_status: oaResult.oa_status ?? undefined,
+              landing_url: oaResult.landing_url ?? undefined,
+              error: oaResult.landing_url
+                ? "Open access copy exists at a repository but no direct PDF link is available. The user can download it manually from the landing page and use import_pdf_to_zotero to attach it."
+                : "No open access PDF found",
+            });
+          }
+        }
+      }
+    }
+
     return {
       content: [
         {
@@ -80,6 +148,7 @@ export async function handleAddItemsByDoi(
             {
               success,
               failed: resolved.failed,
+              ...(pdf_results !== undefined ? { pdf_results } : {}),
             },
             null,
             2
