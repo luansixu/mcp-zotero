@@ -12,6 +12,7 @@ import { handleGetUserId, toolConfig as getUserIdConfig } from "./get-user-id.js
 import { handleAddLinkedUrlAttachment, toolConfig as addLinkedUrlAttachmentConfig } from "./add-linked-url-attachment.js";
 import { handleAddWebItem, toolConfig as addWebItemConfig } from "./add-web-item.js";
 import { handleImportPdfToZotero, toolConfig as importPdfToZoteroConfig } from "./import-pdf-to-zotero.js";
+import { handleFindAndAttachPdfs, toolConfig as findAndAttachPdfsConfig } from "./find-and-attach-pdfs.js";
 
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
@@ -34,6 +35,7 @@ const handlers: Record<string, ToolHandler> = {
   add_linked_url_attachment: handleAddLinkedUrlAttachment,
   add_web_item: handleAddWebItem,
   import_pdf_to_zotero: handleImportPdfToZotero,
+  find_and_attach_pdfs: handleFindAndAttachPdfs,
 };
 
 export async function handleToolCall(
@@ -62,6 +64,7 @@ const toolConfigs = [
   { config: addLinkedUrlAttachmentConfig, handler: handleAddLinkedUrlAttachment },
   { config: addWebItemConfig, handler: handleAddWebItem },
   { config: importPdfToZoteroConfig, handler: handleImportPdfToZotero },
+  { config: findAndAttachPdfsConfig, handler: handleFindAndAttachPdfs },
 ];
 
 export function registerAllTools(

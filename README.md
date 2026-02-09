@@ -3,17 +3,17 @@
 A Model Context Protocol server for Zotero integration. It gives any LLM full access to your Zotero library: search, organize, add papers by DOI, import PDFs, read full-text content, and inject live citations into Word documents.
 
 > Originally based on [mcp-zotero](https://github.com/kaliaboi/mcp-zotero) by Abhishek Kalia.
-> This project has since been extensively rewritten with a new architecture, 12 tools (up from 5), citation injection, PDF management, and Claude skill support.
+> This project has since been extensively rewritten with a new architecture, 13 tools (up from 5), citation injection, PDF management, and Claude skill support.
 
 ## Local vs Remote LLMs
 
-The MCP server is **self-contained**: a local LLM with filesystem access (e.g. Claude Code, LM Studio, Ollama with tool support) can use all 12 tools directly, including `inject_citations` which reads and writes `.docx` files on disk.
+The MCP server is **self-contained**: a local LLM with filesystem access (e.g. Claude Code, LM Studio, Ollama with tool support) can use all 13 tools directly, including `inject_citations` which reads and writes `.docx` files on disk.
 
 For **remote/sandboxed LLMs** (e.g. Claude.ai via Projects) that cannot access your filesystem, the repository includes a **Claude skill** (`skills/zotero-skill-mcp-integrations/`) that runs the citation injection entirely inside the sandbox. The skill generates the `.docx` in-memory using `jszip`, so no filesystem round-trip is needed. The MCP tools are still used for all Zotero API operations (search, add, metadata), while the skill handles the final document assembly.
 
 | Scenario | MCP server | Skill needed? |
 |---|---|---|
-| Local LLM (Claude Code, LM Studio, etc.) | All 12 tools | No |
+| Local LLM (Claude Code, LM Studio, etc.) | All tools | No |
 | Remote LLM (Claude.ai Projects) | API tools (search, add, metadata) | Yes, for citation injection |
 
 ## Setup
@@ -32,7 +32,16 @@ For **remote/sandboxed LLMs** (e.g. Claude.ai via Projects) that cannot access y
    ```bash
    export ZOTERO_API_KEY="your-api-key"
    export ZOTERO_USER_ID="user-id-from-curl"
+   export UNPAYWALL_EMAIL="your@email.edu"   # Optional: enables OA PDF lookup via Unpaywall
    ```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `ZOTERO_API_KEY` | Yes | API key for Zotero Web API v3. Create one at [zotero.org/settings/keys](https://www.zotero.org/settings/keys) with library read/write and file access permissions. Used for all API calls (search, create, upload). |
+| `ZOTERO_USER_ID` | Yes | Your Zotero numeric user ID. Retrieve it with `curl -H "Zotero-API-Key: KEY" https://api.zotero.org/keys/current`. Identifies which library to operate on. |
+| `UNPAYWALL_EMAIL` | No | Email address for Unpaywall API requests (their [rate-limit policy](https://unpaywall.org/products/api) requires an email). Enables Open Access PDF lookup in `add_items_by_doi` (auto-attach) and `find_and_attach_pdfs`. If not set, OA PDF features are silently skipped. |
 
 ## Integration with Claude Desktop
 
@@ -46,7 +55,8 @@ Add to your Claude Desktop configuration:
       "args": ["tsx", "path/to/src/server.ts"],
       "env": {
         "ZOTERO_API_KEY": "YOUR_API_KEY",
-        "ZOTERO_USER_ID": "YOUR_USER_ID"
+        "ZOTERO_USER_ID": "YOUR_USER_ID",
+        "UNPAYWALL_EMAIL": "YOUR_EMAIL"
       }
     }
   }
@@ -75,10 +85,11 @@ claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"e
 
 | Tool | Description |
 |---|---|
-| `add_items_by_doi` | Add papers by DOI resolution (DOI -> CSL-JSON -> Zotero item) |
+| `add_items_by_doi` | Add papers by DOI resolution (DOI -> CSL-JSON -> Zotero item). Auto-attaches OA PDFs via Unpaywall |
 | `add_web_item` | Save a web page as a Zotero item (for articles without DOI) |
 | `create_collection` | Create a new collection, optionally nested under a parent |
 | `import_pdf_to_zotero` | Download a PDF from URL, upload to Zotero storage, auto-index full text |
+| `find_and_attach_pdfs` | Batch OA PDF lookup and auto-attach via Unpaywall (by item keys or collection) |
 | `add_linked_url_attachment` | Attach a URL to an existing item or create a standalone link |
 
 ### Citation & documents
@@ -104,7 +115,7 @@ Example placeholder:
 ```bash
 npm install
 npm run build          # Compile TypeScript
-npm test               # Run tests (vitest, 200+ tests)
+npm test               # Run tests (vitest, 250 tests)
 npx tsx src/server.ts  # Run directly without building
 ```
 

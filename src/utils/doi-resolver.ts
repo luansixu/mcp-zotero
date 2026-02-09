@@ -1,7 +1,9 @@
 import { CslItemData } from "../types/csl-types.js";
+import { mapWithConcurrency } from "./concurrency.js";
+import { fetchWithRetry } from "./fetch-retry.js";
 
 export async function resolveDoi(doi: string): Promise<CslItemData> {
-  const response = await fetch(`https://doi.org/${encodeURIComponent(doi)}`, {
+  const response = await fetchWithRetry(`https://doi.org/${encodeURIComponent(doi)}`, {
     headers: {
       Accept: "application/vnd.citationstyles.csl+json",
     },
@@ -23,16 +25,23 @@ export interface DoiResolutionResult {
 }
 
 export async function resolveDois(
-  dois: string[]
+  dois: string[],
+  concurrency?: number
 ): Promise<DoiResolutionResult> {
-  const result: DoiResolutionResult = { success: [], failed: [] };
+  const settled = await mapWithConcurrency(
+    dois,
+    (doi) => resolveDoi(doi),
+    concurrency
+  );
 
-  for (const doi of dois) {
-    try {
-      const data = await resolveDoi(doi);
-      result.success.push({ doi, data });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+  const result: DoiResolutionResult = { success: [], failed: [] };
+  for (let i = 0; i < settled.length; i++) {
+    const r = settled[i];
+    const doi = dois[i];
+    if (r.status === "fulfilled") {
+      result.success.push({ doi, data: r.value });
+    } else {
+      const message = r.reason instanceof Error ? r.reason.message : String(r.reason);
       result.failed.push({ doi, error: message });
     }
   }
