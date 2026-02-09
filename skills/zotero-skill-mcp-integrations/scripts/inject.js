@@ -22,6 +22,17 @@ try {
   JSZip = require("jszip");
 }
 
+// Resilient fast-xml-parser import (same pattern as JSZip)
+let fxp;
+try {
+  fxp = await import("fast-xml-parser");
+} catch {
+  const { createRequire } = await import("node:module");
+  const require = createRequire(process.cwd() + "/package.json");
+  fxp = require("fast-xml-parser");
+}
+const { XMLParser, XMLBuilder } = fxp;
+
 // ---------------------------------------------------------------------------
 // CLI argument parsing
 // ---------------------------------------------------------------------------
@@ -157,6 +168,19 @@ function regexEscape(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+function unescapeXml(text) {
+  return text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&"); // MUST be last to avoid double-unescaping
+}
+
 // ---------------------------------------------------------------------------
 // Citation text formatter (ported from citation-formatter.ts)
 // ---------------------------------------------------------------------------
@@ -250,6 +274,213 @@ function generateBibliographyFieldCode() {
 }
 
 // ---------------------------------------------------------------------------
+// Zcite normalization (ported from zcite-normalizer.ts)
+// ---------------------------------------------------------------------------
+
+const ZCITE_PATTERN = /&lt;zcite\s+[\s\S]*?\/&gt;/;
+
+const FXP_PARSER_OPTIONS = {
+  preserveOrder: true,
+  ignoreAttributes: false,
+  processEntities: false,
+  trimValues: false,
+  parseTagValue: false,
+  parseAttributeValue: false,
+};
+
+const FXP_BUILDER_OPTIONS = {
+  preserveOrder: true,
+  ignoreAttributes: false,
+  processEntities: false,
+  format: false,
+  suppressEmptyNode: false,
+  suppressBooleanAttributes: false,
+};
+
+function extractRunText(runChildren) {
+  let text = "";
+  for (const child of runChildren) {
+    if ("w:t" in child) {
+      const wtChildren = child["w:t"];
+      for (const tc of wtChildren) {
+        if ("#text" in tc) {
+          text += String(tc["#text"]);
+        }
+      }
+    }
+  }
+  return text;
+}
+
+function isRunNode(node) {
+  return "w:r" in node;
+}
+
+function hasTextContent(runChildren) {
+  return runChildren.some((child) => "w:t" in child);
+}
+
+function collectConsecutiveRunGroups(children) {
+  const groups = [];
+  let currentGroup = null;
+
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    if (isRunNode(child)) {
+      const runChildren = child["w:r"];
+      if (hasTextContent(runChildren)) {
+        const text = extractRunText(runChildren);
+        if (currentGroup) {
+          currentGroup.endIndex = i;
+          currentGroup.texts.push(text);
+        } else {
+          currentGroup = { startIndex: i, endIndex: i, texts: [text] };
+        }
+        continue;
+      }
+    }
+    if (currentGroup && currentGroup.texts.length >= 2) {
+      groups.push(currentGroup);
+    }
+    currentGroup = null;
+  }
+  if (currentGroup && currentGroup.texts.length >= 2) {
+    groups.push(currentGroup);
+  }
+
+  return groups;
+}
+
+function findSplitZcite(group) {
+  const { texts } = group;
+
+  for (let start = 0; start < texts.length; start++) {
+    let concat = "";
+    for (let end = start; end < texts.length; end++) {
+      concat += texts[end];
+      if (end <= start) continue;
+
+      const m = ZCITE_PATTERN.exec(concat);
+      if (m) {
+        const matchStart = m.index;
+        const matchEnd = m.index + m[0].length;
+        const lastRunStart = concat.length - texts[end].length;
+        if (matchStart < lastRunStart && matchEnd > lastRunStart) {
+          return { startOffset: start, endOffset: end };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function mergeRunsInPlace(children, group, startOffset, endOffset) {
+  const absStart = group.startIndex + startOffset;
+  const absEnd = group.startIndex + endOffset;
+  const count = absEnd - absStart + 1;
+
+  let mergedText = "";
+  for (let i = absStart; i <= absEnd; i++) {
+    const runChildren = children[i]["w:r"];
+    mergedText += extractRunText(runChildren);
+  }
+
+  const firstRunChildren = children[absStart]["w:r"];
+  const newRunChildren = [];
+
+  for (const child of firstRunChildren) {
+    if ("w:rPr" in child) {
+      newRunChildren.push(child);
+      break;
+    }
+  }
+
+  newRunChildren.push({
+    "w:t": [{ "#text": mergedText }],
+    ":@": { "@_xml:space": "preserve" },
+  });
+
+  const newRun = { "w:r": newRunChildren };
+
+  const firstRunAttrs = children[absStart][":@"];
+  if (firstRunAttrs) {
+    newRun[":@"] = firstRunAttrs;
+  }
+
+  children.splice(absStart, count, newRun);
+}
+
+function normalizeParagraphRuns(children) {
+  let modified = false;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const groups = collectConsecutiveRunGroups(children);
+
+    for (const group of groups) {
+      const split = findSplitZcite(group);
+      if (split) {
+        mergeRunsInPlace(children, group, split.startOffset, split.endOffset);
+        modified = true;
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return modified;
+}
+
+function walkAndNormalize(nodes) {
+  let modified = false;
+
+  for (const node of nodes) {
+    if ("w:p" in node) {
+      const pChildren = node["w:p"];
+      if (normalizeParagraphRuns(pChildren)) {
+        modified = true;
+      }
+    }
+
+    for (const key of Object.keys(node)) {
+      if (key === ":@" || key === "#text") continue;
+      const value = node[key];
+      if (Array.isArray(value)) {
+        if (walkAndNormalize(value)) {
+          modified = true;
+        }
+      }
+    }
+  }
+
+  return modified;
+}
+
+/**
+ * Pre-process document.xml to merge zcite tags split across multiple w:r runs.
+ * @param {string} documentXml
+ * @returns {string}
+ */
+function normalizeZciteTags(documentXml) {
+  if (!documentXml.includes("zcite")) {
+    return documentXml;
+  }
+
+  const parser = new XMLParser(FXP_PARSER_OPTIONS);
+  const parsed = parser.parse(documentXml);
+
+  const modified = walkAndNormalize(parsed);
+
+  if (!modified) {
+    return documentXml;
+  }
+
+  const builder = new XMLBuilder(FXP_BUILDER_OPTIONS);
+  return builder.build(parsed);
+}
+
+// ---------------------------------------------------------------------------
 // Zcite parsing (ported from injector.ts)
 // ---------------------------------------------------------------------------
 
@@ -258,20 +489,32 @@ function generateBibliographyFieldCode() {
  * @returns {Array<{fullMatch: string, keys: string[], locator?: string, prefix?: string, suffix?: string, num?: string}>}
  */
 function parseZciteMatches(documentXml) {
-  const zciteRegex =
-    /&lt;zcite\s+keys=&quot;([^&]*)&quot;(?:\s+locator=&quot;([^&]*)&quot;)?(?:\s+prefix=&quot;([^&]*)&quot;)?(?:\s+suffix=&quot;([^&]*)&quot;)?(?:\s+num=&quot;([^&]*)&quot;)?\s*\/&gt;/g;
-
+  const findRegex = /&lt;zcite\s+[\s\S]*?\/&gt;/g;
   const matches = [];
-  let match;
+  let findMatch;
 
-  while ((match = zciteRegex.exec(documentXml)) !== null) {
+  while ((findMatch = findRegex.exec(documentXml)) !== null) {
+    const fullMatch = findMatch[0];
+    const cleanTag = unescapeXml(fullMatch);
+
+    const attrRegex = /(\w+)="([^"]*)"/g;
+    const attrs = {};
+    let attrMatch;
+    while ((attrMatch = attrRegex.exec(cleanTag)) !== null) {
+      // Unescape attribute values since the zcite tag is XML
+      // and values like "pp. 12 &amp; 15" need a second unescape
+      attrs[attrMatch[1]] = unescapeXml(attrMatch[2]);
+    }
+
+    if (!attrs["keys"]) continue;
+
     matches.push({
-      fullMatch: match[0],
-      keys: match[1].split(","),
-      locator: match[2] || undefined,
-      prefix: match[3] || undefined,
-      suffix: match[4] || undefined,
-      num: match[5] || undefined,
+      fullMatch,
+      keys: attrs["keys"].split(","),
+      locator: attrs["locator"] || undefined,
+      prefix: attrs["prefix"] || undefined,
+      suffix: attrs["suffix"] || undefined,
+      num: attrs["num"] || undefined,
     });
   }
 
@@ -361,6 +604,7 @@ async function main() {
   }
 
   let documentXml = await documentEntry.async("string");
+  documentXml = normalizeZciteTags(documentXml);
 
   // 2. Read metadata.json
   const metadataRaw = await readFile(metadataPath, "utf-8");

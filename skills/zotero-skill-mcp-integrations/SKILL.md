@@ -28,18 +28,18 @@ If Claude does NOT have access to this skill, the injection cannot happen in the
 ## Dependencies
 
 ```bash
-npm install docx jszip --registry https://registry.npmjs.org
+npm install docx jszip fast-xml-parser --registry https://registry.npmjs.org
 ```
 
 **Always use `--registry https://registry.npmjs.org`** — the sandbox may default to a blocked registry.
 
-**Important:** `jszip` must be resolvable from the working directory where you run `inject.js`. If the skill directory is read-only (e.g. `/mnt/skills/...`), copy the script to your working directory first:
+**Important:** `jszip` and `fast-xml-parser` must be resolvable from the working directory where you run `inject.js`. If the skill directory is read-only (e.g. `/mnt/skills/...`), copy the script to your working directory first:
 
 ```bash
 cp <skill_path>/scripts/inject.js ./inject.js
 ```
 
-The script has a built-in fallback: if the ESM import fails, it tries `createRequire(process.cwd() + "/package.json")` to resolve `jszip` from the current working directory's `node_modules`.
+The script has a built-in fallback: if the ESM import fails, it tries `createRequire(process.cwd() + "/package.json")` to resolve dependencies from the current working directory's `node_modules`.
 
 ## Workflow
 
@@ -76,9 +76,24 @@ include a brief disclosure, e.g.:
 
 This lets the user judge the evidence quality themselves.
 
-#### PDF upload policy
+#### PDF attachment policy
 
-PDF upload to Zotero happens **only when the user explicitly requests it**.
+There are two distinct mechanisms for attaching PDFs. They have different costs and different defaults.
+
+##### 1. Automatic OA attachment (free — leave enabled)
+
+`add_items_by_doi` has an `auto_attach_pdf` parameter (default: `true`). This performs
+a lightweight Unpaywall lookup and attaches freely available open-access PDFs automatically.
+
+> **Do NOT set `auto_attach_pdf: false`.** It is free, adds negligible latency, and
+> enriches the user's Zotero library at no cost. Only disable it if you encounter
+> errors specifically caused by the PDF attachment step (e.g. upload timeouts,
+> Unpaywall failures blocking item creation).
+
+##### 2. Manual PDF upload (only when the user explicitly requests it)
+
+Manual PDF upload via `import_pdf_to_zotero` is a heavier workflow (download → verify →
+upload → validate). This happens **only when the user explicitly asks** to upload PDFs.
 
 > **IF the user explicitly asks to upload/import PDFs to Zotero** → PDF upload is
 > **MANDATORY and cannot be skipped**. For each source:
@@ -100,8 +115,10 @@ PDF upload to Zotero happens **only when the user explicitly requests it**.
 >   > If you have institutional access, please download and upload them to
 >   > Zotero manually. I've already added the bibliographic records.
 >
-> **IF the user does NOT request PDF upload** → do not upload PDFs. Just use
-> the sources (abstract or full text as available) and cite them.
+> **IF the user does NOT request PDF upload** → do not use `import_pdf_to_zotero`.
+> Just use the sources (abstract or full text as available) and cite them.
+> Automatic OA attachment via `auto_attach_pdf` is still active and independent
+> from this policy.
 
 #### Verify-upload-validate procedure (when upload is requested)
 
@@ -248,7 +265,7 @@ Supported attributes:
 
 > **Warning:** When using IEEE or Vancouver style, you MUST include the `num` attribute on every `<zcite>` tag with the correct sequential citation number. Omitting `num` produces `[?]` placeholders.
 
-Attribute order in the tag must be: `keys`, then any of `locator`, `prefix`, `suffix`, `num` (the regex expects this order).
+Attributes can appear in any order (the parser is order-independent).
 
 ### Step 5 — Run injection
 

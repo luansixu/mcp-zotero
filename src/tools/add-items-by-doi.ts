@@ -10,11 +10,11 @@ import { mapWithConcurrency } from "../utils/concurrency.js";
 
 export const toolConfig = {
   name: "add_items_by_doi",
-  description: `Add papers to your Zotero library by resolving DOIs. For each DOI, resolves metadata via content negotiation and creates the item in Zotero. Returns a list of successfully added items (with item_key and title) and any failures. Use the returned item_key values with inject_citations.
+  description: `Add papers to your Zotero library by resolving DOIs. For each DOI, resolves metadata via content negotiation and creates the item in Zotero. Returns a list of successfully added items (with item_key and title) and any failures.
 
-WORKFLOW TIP:
-After adding items, use get_items_details to collect metadata for all returned item_keys in a single batch call.
-If the inject-citations skill is available, Claude can inject citations directly in the sandbox without needing the inject_citations tool.`,
+WORKFLOW TIPS:
+- To collect metadata for all added items, call get_items_details with the returned item_keys (single batch call).
+- To create a cited Word document, use the returned item_keys as <zcite keys="ITEMKEY"/> placeholders in a .docx, then call inject_citations. See inject_citations description for the full workflow.`,
   inputSchema: {
     dois: z
       .array(z.string())
@@ -35,7 +35,7 @@ If the inject-citations skill is available, Claude can inject citations directly
       .boolean()
       .default(true)
       .describe(
-        "Automatically check Unpaywall and attach OA PDFs for added items (default: true)"
+        "Attach freely available OA PDFs via Unpaywall (default: true). This is lightweight and adds no cost — leave enabled. Only set to false if PDF attachment is causing errors."
       ),
   },
 } as const;

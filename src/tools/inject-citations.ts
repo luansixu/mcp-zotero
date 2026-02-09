@@ -6,33 +6,32 @@ import { logger } from "../utils/logger.js";
 
 export const toolConfig = {
   name: "inject_citations",
-  description: `Replace <zcite> placeholder tags in a .docx file with native Zotero field codes that Zotero for Word can recognize and manage.
+  description: `Replace <zcite> placeholder tags in a .docx file with native Zotero field codes that Zotero for Word can recognize and manage. The tool fetches item metadata from Zotero automatically — you only need to provide the .docx file.
 
-EXPECTED INPUT FORMAT:
-The .docx file must contain citation placeholders as literal text in the format:
+WORKFLOW — how to create a Word document with live Zotero citations:
+1. Collect item keys: use add_items_by_doi (or search_library for existing items)
+2. Generate .docx: create a Word document (e.g. with the "docx" npm package) with <zcite keys="ITEMKEY"/> placeholders where citations should appear. Each <zcite> MUST be in its own dedicated TextRun — do NOT mix it with surrounding text.
+3. Call this tool with the .docx file path. It replaces every zcite tag with a Zotero field code and appends a bibliography.
+4. Tell the user to open the file in Word with the Zotero plugin and click Zotero → Refresh.
+
+CITATION STYLES — ask the user which style they want before generating:
+- apa (default): author-year — (Smith, 2023)
+- ieee / vancouver: numbered — [1], [2]
+  WARNING: for numbered styles every <zcite> MUST include a num="N" attribute with the sequential citation number. Without num, citations render as [?].
+
+ZCITE TAG FORMAT:
   <zcite keys="ITEMKEY"/>
-where ITEMKEY is a valid Zotero item key (obtained from add_items_by_doi or search_library).
-
-IMPORTANT: Each <zcite> tag MUST be placed in its own dedicated TextRun when generating the .docx with docx-js. Do NOT mix the tag with other text in the same TextRun.
-
-Supported tag variations:
-  - Single citation: <zcite keys="ABC12345"/>
-  - Multiple items: <zcite keys="ABC12345,DEF67890"/>
-  - With page locator: <zcite keys="ABC12345" locator="pp. 12-15"/>
-  - With prefix: <zcite keys="ABC12345" prefix="see "/>
-  - With suffix: <zcite keys="ABC12345" suffix=", emphasis added"/>
-  - With citation number (IEEE/Vancouver): <zcite keys="ABC12345" num="1"/>
+Supported attributes (any order):
+  - keys (required): item key or comma-separated keys — "ABC12345" or "ABC12345,DEF67890"
+  - num: citation number for IEEE/Vancouver — "1" or "1,2" (required for numbered styles)
+  - locator: page reference — "pp. 12-15"
+  - prefix: text before citation — "see "
+  - suffix: text after citation — ", emphasis added"
 
 OUTPUT:
-A new .docx file (original filename with _cited suffix) where each <zcite> tag is replaced with a Zotero field code, and a ZOTERO_BIBL bibliography field code is appended at the end. Opening the file in Word with the Zotero plugin installed will show live, manageable citations.
+A new .docx file (original filename with _cited suffix) with Zotero field codes and a ZOTERO_BIBL bibliography at the end.
 
-FALLBACK NOTE:
-If the inject-citations skill is available, prefer the skill workflow (runs in sandbox, no filesystem dependency).
-If the skill is not available, this tool serves as fallback. The recommended workflow without the skill is:
-1. Generate the .docx with <zcite> tags
-2. Have the user download the file
-3. Ask the user for the file path on their PC
-4. Call this tool with the file path`,
+NOTE: If the inject-citations skill is available, prefer the skill workflow (runs in sandbox, no filesystem dependency). This tool serves as the primary path when the skill is not available.`,
   inputSchema: {
     file_path: z
       .string()

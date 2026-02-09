@@ -4,7 +4,8 @@ import { ZoteroApiInterface, ZoteroItemData } from "../types/zotero-types.js";
 import { CslItemData, ZoteroCitationItem } from "../types/csl-types.js";
 import { generateZoteroFieldCode, generateBibliographyFieldCode } from "./field-codes.js";
 import { formatCitationText } from "./citation-formatter.js";
-import { regexEscape } from "./xml-utils.js";
+import { regexEscape, unescapeXml } from "./xml-utils.js";
+import { normalizeZciteTags } from "./zcite-normalizer.js";
 import { zoteroItemToCsl } from "../utils/csl-to-zotero.js";
 
 export interface InjectionResult {
@@ -24,24 +25,34 @@ interface ZciteMatch {
 }
 
 function parseZciteMatches(documentXml: string): ZciteMatch[] {
-  // Attributes can appear in any order after keys
-  const zciteRegex =
-    /&lt;zcite\s+keys=&quot;([^&]*)&quot;(?:\s+locator=&quot;([^&]*)&quot;)?(?:\s+prefix=&quot;([^&]*)&quot;)?(?:\s+suffix=&quot;([^&]*)&quot;)?(?:\s+num=&quot;([^&]*)&quot;)?\s*\/&gt;/g;
-
+  const findRegex = /&lt;zcite\s+[\s\S]*?\/&gt;/g;
   const matches: ZciteMatch[] = [];
-  let match: RegExpExecArray | null;
+  let findMatch: RegExpExecArray | null;
 
-  while ((match = zciteRegex.exec(documentXml)) !== null) {
+  while ((findMatch = findRegex.exec(documentXml)) !== null) {
+    const fullMatch = findMatch[0];
+    const cleanTag = unescapeXml(fullMatch);
+
+    const attrRegex = /(\w+)="([^"]*)"/g;
+    const attrs: Record<string, string> = {};
+    let attrMatch: RegExpExecArray | null;
+    while ((attrMatch = attrRegex.exec(cleanTag)) !== null) {
+      // Unescape attribute values since the zcite tag is XML
+      // and values like "pp. 12 &amp; 15" need a second unescape
+      attrs[attrMatch[1]] = unescapeXml(attrMatch[2]);
+    }
+
+    if (!attrs["keys"]) continue;
+
     matches.push({
-      fullMatch: match[0],
-      keys: match[1].split(","),
-      locator: match[2] || undefined,
-      prefix: match[3] || undefined,
-      suffix: match[4] || undefined,
-      num: match[5] || undefined,
+      fullMatch,
+      keys: attrs["keys"].split(","),
+      locator: attrs["locator"] || undefined,
+      prefix: attrs["prefix"] || undefined,
+      suffix: attrs["suffix"] || undefined,
+      num: attrs["num"] || undefined,
     });
   }
-
   return matches;
 }
 
@@ -143,6 +154,7 @@ export async function injectCitations(
   }
 
   let documentXml = await documentEntry.async("string");
+  documentXml = normalizeZciteTags(documentXml);
 
   const matches = parseZciteMatches(documentXml);
 

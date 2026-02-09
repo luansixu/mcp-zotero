@@ -5,16 +5,22 @@ A Model Context Protocol server for Zotero integration. It gives any LLM full ac
 > Originally based on [mcp-zotero](https://github.com/kaliaboi/mcp-zotero) by Abhishek Kalia.
 > This project has since been extensively rewritten with a new architecture, 13 tools (up from 5), citation injection, PDF management, and Claude skill support.
 
+## How it works
+
+The server is designed to be **usable by any LLM without external documentation**. On connection, it sends workflow instructions via the MCP `instructions` field, and each tool description includes cross-references and usage guidance. An LLM that has never seen this server before can discover the full workflow — from adding papers to producing a cited Word document — directly from the tool listing.
+
+For advanced use cases (PDF upload policy, citation style guidance, source transparency), a **Claude skill** is included for Claude.ai Projects. But the skill is optional: the MCP server is fully self-documenting.
+
 ## Local vs Remote LLMs
-
-The MCP server is **self-contained**: a local LLM with filesystem access (e.g. Claude Code, LM Studio, Ollama with tool support) can use all 13 tools directly, including `inject_citations` which reads and writes `.docx` files on disk.
-
-For **remote/sandboxed LLMs** (e.g. Claude.ai via Projects) that cannot access your filesystem, the repository includes a **Claude skill** (`skills/zotero-skill-mcp-integrations/`) that runs the citation injection entirely inside the sandbox. The skill generates the `.docx` in-memory using `jszip`, so no filesystem round-trip is needed. The MCP tools are still used for all Zotero API operations (search, add, metadata), while the skill handles the final document assembly.
 
 | Scenario | MCP server | Skill needed? |
 |---|---|---|
-| Local LLM (Claude Code, LM Studio, etc.) | All tools | No |
-| Remote LLM (Claude.ai Projects) | API tools (search, add, metadata) | Yes, for citation injection |
+| Local LLM (Claude Code, LM Studio, etc.) | All 13 tools | No |
+| Remote/sandboxed LLM (Claude.ai Projects) | API tools (search, add, metadata) | Yes, for citation injection |
+
+Local LLMs with filesystem access can use all tools directly, including `inject_citations` which reads and writes `.docx` files on disk.
+
+Remote LLMs without filesystem access can use the included **Claude skill** (`skills/zotero-skill-mcp-integrations/`), which runs citation injection entirely inside the sandbox. MCP tools handle all Zotero API operations; the skill handles document assembly.
 
 ## Setup
 
@@ -39,9 +45,9 @@ For **remote/sandboxed LLMs** (e.g. Claude.ai via Projects) that cannot access y
 
 | Variable | Required | Description |
 |---|---|---|
-| `ZOTERO_API_KEY` | Yes | API key for Zotero Web API v3. Create one at [zotero.org/settings/keys](https://www.zotero.org/settings/keys) with library read/write and file access permissions. Used for all API calls (search, create, upload). |
-| `ZOTERO_USER_ID` | Yes | Your Zotero numeric user ID. Retrieve it with `curl -H "Zotero-API-Key: KEY" https://api.zotero.org/keys/current`. Identifies which library to operate on. |
-| `UNPAYWALL_EMAIL` | No | Email address for Unpaywall API requests (their [rate-limit policy](https://unpaywall.org/products/api) requires an email). Enables Open Access PDF lookup in `add_items_by_doi` (auto-attach) and `find_and_attach_pdfs`. If not set, OA PDF features are silently skipped. |
+| `ZOTERO_API_KEY` | Yes | API key for Zotero Web API v3. Create one at [zotero.org/settings/keys](https://www.zotero.org/settings/keys) with library read/write and file access permissions. |
+| `ZOTERO_USER_ID` | Yes | Your Zotero numeric user ID. Retrieve it with `curl -H "Zotero-API-Key: KEY" https://api.zotero.org/keys/current`. |
+| `UNPAYWALL_EMAIL` | No | Email for Unpaywall API requests ([rate-limit policy](https://unpaywall.org/products/api)). Enables OA PDF lookup in `add_items_by_doi` and `find_and_attach_pdfs`. If not set, OA PDF features are silently skipped. |
 
 ## Integration with Claude Desktop
 
@@ -85,7 +91,7 @@ claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"e
 
 | Tool | Description |
 |---|---|
-| `add_items_by_doi` | Add papers by DOI resolution (DOI -> CSL-JSON -> Zotero item). Auto-attaches OA PDFs via Unpaywall |
+| `add_items_by_doi` | Add papers by DOI with automatic metadata resolution. Auto-attaches OA PDFs via Unpaywall |
 | `add_web_item` | Save a web page as a Zotero item (for articles without DOI) |
 | `create_collection` | Create a new collection, optionally nested under a parent |
 | `import_pdf_to_zotero` | Download a PDF from URL, upload to Zotero storage, auto-index full text |
@@ -96,26 +102,15 @@ claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"e
 
 | Tool | Description |
 |---|---|
-| `inject_citations` | Replace `<zcite>` placeholders in `.docx` with native Zotero field codes |
-| `get_user_id` | Returns the Zotero user ID (needed by the citation injection skill) |
-
-## Citation Injection
-
-The `inject_citations` tool (and the equivalent Claude skill) replaces `<zcite>` placeholder tags in Word documents with native Zotero field codes. After injection, opening the document in Word with the Zotero plugin and clicking **Zotero -> Refresh** connects the citations to your live library.
-
-Supported citation styles: **APA**, **IEEE**, **Vancouver**, **Harvard**, **Chicago**.
-
-Example placeholder:
-```
-<zcite keys="ABC12345" num="1"/>
-```
+| `inject_citations` | Inject live Zotero citations into a Word document. Supports APA, IEEE, Vancouver, Harvard, Chicago |
+| `get_user_id` | Returns the configured Zotero user ID |
 
 ## Development
 
 ```bash
 npm install
 npm run build          # Compile TypeScript
-npm test               # Run tests (vitest, 250 tests)
+npm test               # Run tests (vitest, 299 tests)
 npx tsx src/server.ts  # Run directly without building
 ```
 
