@@ -1,3 +1,4 @@
+import { fetchWithRetry } from "./fetch-retry.js";
 import { logger } from "./logger.js";
 
 export interface UnpaywallOaLocation {
@@ -53,7 +54,7 @@ export async function lookupOaPdf(doi: string): Promise<OaPdfLookupResult> {
 
   let response: Response;
   try {
-    response = await fetch(url);
+    response = await fetchWithRetry(url);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     logger.error("Unpaywall API network error", { doi, error: detail });
@@ -106,7 +107,7 @@ export async function lookupOaPdfWithFallbacks(doi: string): Promise<{
 
   let response: Response;
   try {
-    response = await fetch(url);
+    response = await fetchWithRetry(url);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     logger.error("Unpaywall API network error", { doi, error: detail });

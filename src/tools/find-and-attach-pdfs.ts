@@ -4,6 +4,7 @@ import { formatErrorResponse } from "../utils/error-formatter.js";
 import { logger } from "../utils/logger.js";
 import { lookupOaPdfWithFallbacks } from "../utils/unpaywall.js";
 import { downloadAndUploadPdf } from "../utils/pdf-uploader.js";
+import { mapWithConcurrency } from "../utils/concurrency.js";
 
 export const toolConfig = {
   name: "find_and_attach_pdfs",
@@ -101,26 +102,16 @@ export async function handleFindAndAttachPdfs(
       }
     }
 
-    // 3. Process each item
-    const results: ItemResult[] = [];
-    let attached = 0;
-    let notFound = 0;
-    let skipped = 0;
-    let errors = 0;
-
-    for (const key of keys) {
+    // 3. Process each item in parallel
+    const settled = await mapWithConcurrency(keys, async (key): Promise<ItemResult> => {
       const item = itemMap.get(key);
       if (!item) {
-        results.push({ item_key: key, doi: null, status: "error", reason: "Item not found" });
-        errors++;
-        continue;
+        return { item_key: key, doi: null, status: "error", reason: "Item not found" };
       }
 
       const doi = item.DOI ?? null;
       if (!doi) {
-        results.push({ item_key: key, doi: null, status: "error", reason: "No DOI" });
-        errors++;
-        continue;
+        return { item_key: key, doi: null, status: "error", reason: "No DOI" };
       }
 
       // Check for existing attachments
@@ -137,9 +128,7 @@ export async function handleFindAndAttachPdfs(
             child.itemType === "attachment" && child.contentType === "application/pdf"
         );
         if (hasPdf) {
-          results.push({ item_key: key, doi, status: "skipped", reason: "PDF attachment already exists" });
-          skipped++;
-          continue;
+          return { item_key: key, doi, status: "skipped", reason: "PDF attachment already exists" };
         }
       }
 
@@ -147,36 +136,38 @@ export async function handleFindAndAttachPdfs(
       const { primary, fallback_urls } = await lookupOaPdfWithFallbacks(doi);
 
       if (!primary.found || !primary.pdf_url) {
-        const reason = primary.warning
-          ?? (primary.landing_url
-            ? `Open access copy exists at a repository but no direct PDF link is available. If the user needs this PDF, they can download it manually from the landing page and use import_pdf_to_zotero to attach it.`
-            : (primary.oa_status ? `OA status: ${primary.oa_status}` : "No open access PDF found"));
-        results.push({
+        let reason: string;
+        if (primary.warning) {
+          reason = primary.warning;
+        } else if (primary.landing_url) {
+          reason = "Open access copy exists at a repository but no direct PDF link is available. If the user needs this PDF, they can download it manually from the landing page and use import_pdf_to_zotero to attach it.";
+        } else if (primary.oa_status) {
+          reason = `OA status: ${primary.oa_status}`;
+        } else {
+          reason = "No open access PDF found";
+        }
+        return {
           item_key: key,
           doi,
           status: "not_found",
           reason,
           ...(primary.landing_url ? { landing_url: primary.landing_url } : {}),
           ...(primary.oa_status ? { oa_status: primary.oa_status } : {}),
-        });
-        notFound++;
-        continue;
+        };
       }
 
       if (dry_run) {
-        results.push({
+        return {
           item_key: key,
           doi,
           status: "available",
           source: primary.source ?? undefined,
           pdf_url: primary.pdf_url,
-        });
-        continue;
+        };
       }
 
       // Try primary URL, then fallbacks
       const urlsToTry = [primary.pdf_url, ...fallback_urls];
-      let uploadSuccess = false;
 
       for (const pdfUrl of urlsToTry) {
         const uploadResult = await downloadAndUploadPdf(zoteroApi, userId, apiKey, {
@@ -185,29 +176,38 @@ export async function handleFindAndAttachPdfs(
         });
 
         if (uploadResult.success) {
-          results.push({
+          return {
             item_key: key,
             doi,
             status: "attached",
             source: primary.source ?? undefined,
             pdf_url: pdfUrl,
-          });
-          attached++;
-          uploadSuccess = true;
-          break;
+          };
         }
       }
 
-      if (!uploadSuccess) {
-        results.push({
-          item_key: key,
-          doi,
-          status: "error",
-          reason: `Download failed for all ${urlsToTry.length} URL(s)`,
-          source: primary.source ?? undefined,
-        });
-        errors++;
-      }
+      return {
+        item_key: key,
+        doi,
+        status: "error",
+        reason: `Download failed for all ${urlsToTry.length} URL(s)`,
+        source: primary.source ?? undefined,
+      };
+    });
+
+    const results: ItemResult[] = settled
+      .filter((r): r is PromiseFulfilledResult<ItemResult> => r.status === "fulfilled")
+      .map((r) => r.value);
+
+    let attached = 0;
+    let notFound = 0;
+    let skipped = 0;
+    let errors = 0;
+    for (const r of results) {
+      if (r.status === "attached") attached++;
+      else if (r.status === "not_found") notFound++;
+      else if (r.status === "skipped") skipped++;
+      else if (r.status === "error") errors++;
     }
 
     return {
