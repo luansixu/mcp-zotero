@@ -100,6 +100,13 @@ export async function handleImportPdfToZotero(
           status: statusMatch ? Number(statusMatch[1]) : undefined,
         });
       }
+      if (errorMsg.includes("not a valid PDF") || errorMsg.includes("HTML page instead of a PDF")) {
+        return formatErrorResponse("Downloaded file is not a valid PDF", {
+          url,
+          details: errorMsg,
+          suggestion: "The URL may redirect to an HTML page or require browser access. Try a direct PDF link.",
+        });
+      }
       if (errorMsg.includes("Upload registration failed")) {
         const statusMatch = errorMsg.match(/status (\d+)/);
         return formatErrorResponse("Upload registration failed", {

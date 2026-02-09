@@ -64,7 +64,11 @@ export async function downloadAndUploadPdf(
   // 1. Download the file
   let downloadResponse: Response;
   try {
-    downloadResponse = await fetch(options.url);
+    downloadResponse = await fetch(options.url, {
+      headers: {
+        "User-Agent": "mcp-zotero/1.0 (Open Access PDF retrieval)",
+      },
+    });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     return {
@@ -80,10 +84,32 @@ export async function downloadAndUploadPdf(
     };
   }
 
+  const responseContentType = downloadResponse.headers.get("content-type") ?? "";
+  if (!responseContentType.includes("application/pdf") && !responseContentType.includes("application/octet-stream")) {
+    logger.warn("Unexpected Content-Type for PDF download", {
+      url: options.url,
+      contentType: responseContentType,
+    });
+  }
+
   const arrayBuffer = await downloadResponse.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  // 2. Validate size
+  // 2. Validate PDF magic bytes
+  const PDF_MAGIC = Buffer.from("%PDF-");
+  if (buffer.length < 5 || buffer.subarray(0, 5).compare(PDF_MAGIC) !== 0) {
+    const detectedContentType = downloadResponse.headers.get("content-type") ?? "unknown";
+    const preview = buffer.subarray(0, 200).toString("utf-8");
+    const looksHtml = preview.toLowerCase().includes("<html") || preview.toLowerCase().includes("<!doctype");
+    return {
+      success: false,
+      error: looksHtml
+        ? `The server returned an HTML page instead of a PDF (Content-Type: ${detectedContentType}). The URL may require browser access, authentication, or redirect to a landing page.`
+        : `Downloaded file is not a valid PDF (Content-Type: ${detectedContentType}, missing %PDF- header). The URL may not point to a direct PDF download.`,
+    };
+  }
+
+  // 3. Validate size
   if (buffer.length > MAX_FILE_SIZE) {
     return {
       success: false,

@@ -12,7 +12,7 @@ vi.mock("./zotero-fulltext.js", () => ({
 
 const TEST_USER_ID = "12345";
 const TEST_API_KEY = "test-api-key";
-const pdfBuffer = Buffer.from("fake-pdf-content");
+const pdfBuffer = Buffer.from("%PDF-1.4 fake-pdf-content");
 
 function mockFetchChain(overrides?: {
   download?: Partial<Response>;
@@ -24,6 +24,7 @@ function mockFetchChain(overrides?: {
   fetchMock.mockResolvedValueOnce({
     ok: true,
     status: 200,
+    headers: new Headers({ "content-type": "application/pdf" }),
     arrayBuffer: () =>
       Promise.resolve(
         pdfBuffer.buffer.slice(pdfBuffer.byteOffset, pdfBuffer.byteOffset + pdfBuffer.byteLength)
@@ -132,6 +133,7 @@ describe("downloadAndUploadPdf", () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
+      headers: new Headers({ "content-type": "application/pdf" }),
       arrayBuffer: () =>
         Promise.resolve(
           pdfBuffer.buffer.slice(pdfBuffer.byteOffset, pdfBuffer.byteOffset + pdfBuffer.byteLength)
@@ -217,5 +219,77 @@ describe("downloadAndUploadPdf", () => {
     const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
     expect(postedData[0]).toHaveProperty("parentItem", "PARENT1");
     expect(postedData[0]).toHaveProperty("collections", []);
+  });
+
+  it("returns error when server returns HTML instead of PDF", async () => {
+    const htmlBuffer = Buffer.from("<!DOCTYPE html><html><body>Please use a browser</body></html>");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "text/html" }),
+        arrayBuffer: () =>
+          Promise.resolve(
+            htmlBuffer.buffer.slice(htmlBuffer.byteOffset, htmlBuffer.byteOffset + htmlBuffer.byteLength)
+          ),
+      })
+    );
+
+    const { mock } = createZoteroApiMock([]);
+    const result = await downloadAndUploadPdf(mock, TEST_USER_ID, TEST_API_KEY, {
+      url: "https://example.com/paper.pdf",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("HTML page instead of a PDF");
+    expect(result.error).toContain("text/html");
+  });
+
+  it("returns error when downloaded file is not a valid PDF", async () => {
+    const randomBuffer = Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/octet-stream" }),
+        arrayBuffer: () =>
+          Promise.resolve(
+            randomBuffer.buffer.slice(randomBuffer.byteOffset, randomBuffer.byteOffset + randomBuffer.byteLength)
+          ),
+      })
+    );
+
+    const { mock } = createZoteroApiMock([]);
+    const result = await downloadAndUploadPdf(mock, TEST_USER_ID, TEST_API_KEY, {
+      url: "https://example.com/paper.pdf",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("not a valid PDF");
+    expect(result.error).toContain("missing %PDF- header");
+  });
+
+  it("sends User-Agent header in download request", async () => {
+    const fetchMock = mockFetchChain();
+    await mockFulltextSuccess();
+
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "UP006", title: "paper.pdf" }],
+      errors: {},
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+
+    await downloadAndUploadPdf(mock, TEST_USER_ID, TEST_API_KEY, {
+      url: "https://example.com/paper.pdf",
+    });
+
+    // First fetch call is the download
+    const downloadCall = fetchMock.mock.calls[0];
+    expect(downloadCall[1]).toHaveProperty("headers");
+    const headers = downloadCall[1].headers as Record<string, string>;
+    expect(headers["User-Agent"]).toBe("mcp-zotero/1.0 (Open Access PDF retrieval)");
   });
 });
