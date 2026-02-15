@@ -1,0 +1,54 @@
+# Source
+src/
+
+# Tests
+**/*.test.ts
+**/__mocks__/
+coverage/
+.nyc_output/
+
+# Dev config
+tsconfig.json
+vitest.config.*
+.eslintrc*
+.prettierrc*
+.editorconfig
+
+# Docs & project files
+.docs/
+CLAUDE.md
+smithery.yaml
+notes.md
+TODO.md
+
+# Skill (standalone script, not part of the npm package)
+skill/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Env & secrets
+.env*
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug
+.debug/
+debug.log
+
+# Temp
+tmp/
+temp/
+*.tmp
+
+# Claude
+.claude/

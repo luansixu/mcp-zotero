@@ -1,5 +1,7 @@
 # MCP Zotero
 
+> **Note:** This is an unofficial community project and is not affiliated with, endorsed by, or supported by the Zotero team or the Corporation for Digital Scholarship. "Zotero" is a registered trademark of the Corporation for Digital Scholarship.
+
 A Model Context Protocol server for Zotero integration. It gives any LLM full access to your Zotero library: search, organize, add papers by DOI, import PDFs, read full-text content, and inject live citations into Word documents.
 
 > Originally based on [mcp-zotero](https://github.com/kaliaboi/mcp-zotero) by Abhishek Kalia.
@@ -58,7 +60,7 @@ Add to your Claude Desktop configuration:
   "mcpServers": {
     "zotero": {
       "command": "npx",
-      "args": ["tsx", "path/to/src/server.ts"],
+      "args": ["-y", "@xevos117/mcp-zotero"],
       "env": {
         "ZOTERO_API_KEY": "YOUR_API_KEY",
         "ZOTERO_USER_ID": "YOUR_USER_ID",

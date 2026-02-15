@@ -1,36 +1,46 @@
 {
-  "name": "mcp-zotero",
+  "name": "@xevos117/mcp-zotero",
   "type": "module",
   "version": "1.0.2",
+  "description": "Unofficial MCP server for Zotero integration with citation management",
   "repository": {
     "type": "git",
     "url": "https://github.com/Xevos117/mcp-zotero"
   },
-  "main": "index.js",
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "build": "tsc && chmod +x build/server.js",
-    "postbuild": "echo '#!/usr/bin/env node' | cat - build/server.js > temp && mv temp build/server.js",
-    "start": "node build/server.js"
+  "homepage": "https://github.com/Xevos117/mcp-zotero#readme",
+  "bugs": {
+    "url": "https://github.com/Xevos117/mcp-zotero/issues"
   },
+  "main": "build/server.js",
   "bin": {
     "mcp-zotero": "./build/server.js"
   },
   "files": [
-    "build",
-    "README.md"
+    "build"
   ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc",
+    "start": "node build/server.js",
+    "prepublishOnly": "npm test && npm run build"
+  },
   "keywords": [
     "mcp",
+    "model-context-protocol",
     "zotero",
     "zotero-api",
-    "zotero-api-client",
-    "claude"
+    "citation",
+    "bibliography",
+    "reference-manager",
+    "claude",
+    "ai"
   ],
   "author": "Xevos17",
   "license": "MIT",
-  "description": "MCP server for Zotero integration with citation management",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
     "dotenv": "^16.4.7",
