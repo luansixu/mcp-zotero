@@ -65,9 +65,10 @@ export const toolConfig = {
   description: `Add items to Zotero by providing metadata directly. Supports ALL 37 Zotero item types.
 
 WHEN TO USE:
-- For items without a DOI (books, theses, reports, etc.)
-- When you have metadata but no DOI to resolve
-- Prefer add_items_by_doi when DOIs are available (auto-resolves metadata)
+- For items that do not have a DOI (books, theses, reports, etc.)
+- When you need full control over metadata (e.g., override a title, set a specific itemType, add custom fields) — even if a DOI exists, use add_items when the auto-resolved metadata would be incorrect or incomplete
+- Mixed batch: if some items have DOIs and others don't, call add_items_by_doi for the DOIs and add_items for the rest (two separate calls)
+- Prefer add_items_by_doi when DOIs are available AND you don't need to override metadata (it auto-resolves everything and attaches OA PDFs)
 
 BATCH: Pass multiple items in the 'items' array (single API call).
 

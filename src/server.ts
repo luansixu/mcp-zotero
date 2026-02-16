@@ -31,7 +31,7 @@ class ZoteroServer {
           "Zotero library management and citation injection for Word documents.",
           "",
           "CITATION WORKFLOW:",
-          "1. Collect item keys: use add_items_by_doi (or search_library for existing items)",
+          "1. Collect item keys: use add_items_by_doi for items with DOIs, add_items for items without DOIs (or search_library for existing items)",
           "2. Generate .docx: create a Word document with <zcite keys=\"ITEMKEY\"/> placeholders where citations should appear. Each <zcite> must be in its own TextRun.",
           "3. Call inject_citations with the .docx file path — it fetches metadata from Zotero automatically.",
           "4. Tell the user to open in Word with Zotero plugin → click Zotero → Refresh.",

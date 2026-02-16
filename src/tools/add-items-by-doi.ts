@@ -10,7 +10,12 @@ import { mapWithConcurrency } from "../utils/concurrency.js";
 
 export const toolConfig = {
   name: "add_items_by_doi",
-  description: `Add papers to your Zotero library by resolving DOIs. For each DOI, resolves metadata via content negotiation and creates the item in Zotero. Returns a list of successfully added items (with item_key and title) and any failures.
+  description: `Add items to your Zotero library by resolving DOIs. Works with ANY item type that has a DOI — journal articles, books, datasets, preprints, conference papers, reports, etc. For each DOI, resolves metadata via content negotiation and creates the item in Zotero with the correct type automatically. Returns a list of successfully added items (with item_key and title) and any failures.
+
+WHEN TO USE vs add_items:
+- Use add_items_by_doi when the item HAS a DOI — it auto-resolves all metadata and attaches OA PDFs.
+- Use add_items when the item does NOT have a DOI, or when you need to override specific metadata fields (add_items_by_doi does not allow metadata overrides).
+- Mixed batch: if some items have DOIs and others don't, make two separate calls — add_items_by_doi for the DOIs and add_items for the rest.
 
 WORKFLOW TIPS:
 - To collect metadata for all added items, call get_items_details with the returned item_keys (single batch call).

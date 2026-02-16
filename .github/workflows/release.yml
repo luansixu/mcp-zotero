@@ -1,0 +1,65 @@
+name: Release — npm publish & skill zips
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write   # needed to upload release assets
+
+jobs:
+  # ── 1. Run tests before publishing anything ──────────────────
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  # ── 2. Publish to npm ───────────────────────────────────────
+  npm-publish:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ── 3. Generate skill zips and attach to the release ────────
+  skill-zips:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create skill zip archives
+        run: |
+          mkdir -p dist-skills
+          for skill_dir in skills/*/; do
+            skill_name=$(basename "$skill_dir")
+            (cd skills && zip -r "../dist-skills/${skill_name}.zip" "$skill_name")
+          done
+          ls -lh dist-skills/
+
+      - name: Upload zips to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for zip_file in dist-skills/*.zip; do
+            gh release upload "${{ github.event.release.tag_name }}" "$zip_file" --clobber
+          done
