@@ -3,6 +3,7 @@ name: Release — npm publish & skill zips
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write   # needed to upload release assets
@@ -57,10 +58,21 @@ jobs:
           done
           ls -lh dist-skills/
 
+      - name: Resolve release tag
+        id: tag
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+          fi
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload zips to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           for zip_file in dist-skills/*.zip; do
-            gh release upload "${{ github.event.release.tag_name }}" "$zip_file" --clobber
+            gh release upload "${{ steps.tag.outputs.name }}" "$zip_file" --clobber
           done
