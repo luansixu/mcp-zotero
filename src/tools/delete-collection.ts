@@ -28,11 +28,11 @@ export async function handleDeleteCollection(
 
   if (!canDeleteCollections(unsafeOps)) {
     return formatErrorResponse(
-      "Deletion of collections is not allowed. Set the UNSAFE_OPERATIONS environment variable to 'collections' or 'both' to enable this operation.",
+      "Deletion of collections is not allowed. Set the UNSAFE_OPERATIONS environment variable to 'all' to enable this operation.",
       {
         env_var: "UNSAFE_OPERATIONS",
         current_value: unsafeOps,
-        required_values: ["collections", "both"],
+        required_values: ["all"],
       }
     );
   }
@@ -44,9 +44,9 @@ export async function handleDeleteCollection(
       .get();
 
     const collection = response.getData() as ZoteroItemData;
-    const version = collection.version;
+    const version = response.getVersion();
 
-    if (version === undefined) {
+    if (version === null) {
       return formatErrorResponse("Could not determine collection version", {
         collection_key,
       });

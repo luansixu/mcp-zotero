@@ -1,6 +1,6 @@
-export type UnsafeOperationsMode = "none" | "collections" | "items" | "both";
+export type UnsafeOperationsMode = "none" | "items" | "all";
 
-const VALID_MODES = new Set<string>(["none", "collections", "items", "both"]);
+const VALID_MODES = new Set<string>(["none", "items", "all"]);
 
 export function parseUnsafeOperations(value: string | undefined): UnsafeOperationsMode {
   const normalized = (value ?? "").trim().toLowerCase();
@@ -11,9 +11,9 @@ export function parseUnsafeOperations(value: string | undefined): UnsafeOperatio
 }
 
 export function canDeleteCollections(mode: UnsafeOperationsMode): boolean {
-  return mode === "collections" || mode === "both";
+  return mode === "all";
 }
 
 export function canDeleteItems(mode: UnsafeOperationsMode): boolean {
-  return mode === "items" || mode === "both";
+  return mode === "items" || mode === "all";
 }

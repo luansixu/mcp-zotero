@@ -5,7 +5,7 @@
 A Model Context Protocol server for Zotero integration. It gives any LLM full access to your Zotero library: search, organize, add papers by DOI, import PDFs, read full-text content, and inject live citations into Word documents.
 
 > Originally based on [mcp-zotero](https://github.com/kaliaboi/mcp-zotero) by Abhishek Kalia.
-> This project has since been extensively rewritten with a new architecture, 13 tools (up from 5), citation injection, PDF management, and Claude skill support.
+> This project has since been extensively rewritten with a new architecture, 15 tools (up from 5), citation injection, PDF management, and Claude skill support.
 
 ## How it works
 
@@ -17,7 +17,7 @@ For advanced use cases (PDF upload policy, citation style guidance, source trans
 
 | Scenario | MCP server | Skill needed? |
 |---|---|---|
-| Local LLM (Claude Code, LM Studio, etc.) | All 13 tools | No |
+| Local LLM (Claude Code, LM Studio, etc.) | All 15 tools | No |
 | Remote/sandboxed LLM (Claude.ai Projects) | API tools (search, add, metadata) | Yes, for citation injection |
 
 Local LLMs with filesystem access can use all tools directly, including `inject_citations` which reads and writes `.docx` files on disk.
@@ -41,6 +41,7 @@ Remote LLMs without filesystem access can use the included **Claude skill** (`sk
    export ZOTERO_API_KEY="your-api-key"
    export ZOTERO_USER_ID="user-id-from-curl"
    export UNPAYWALL_EMAIL="your@email.edu"   # Optional: enables OA PDF lookup via Unpaywall
+   export UNSAFE_OPERATIONS="none"           # Optional: "none" | "items" | "all" (see below)
    ```
 
 ## Environment Variables
@@ -50,6 +51,45 @@ Remote LLMs without filesystem access can use the included **Claude skill** (`sk
 | `ZOTERO_API_KEY` | Yes | API key for Zotero Web API v3. Create one at [zotero.org/settings/keys](https://www.zotero.org/settings/keys) with library read/write and file access permissions. |
 | `ZOTERO_USER_ID` | Yes | Your Zotero numeric user ID. Retrieve it with `curl -H "Zotero-API-Key: KEY" https://api.zotero.org/keys/current`. |
 | `UNPAYWALL_EMAIL` | No | Email for Unpaywall API requests ([rate-limit policy](https://unpaywall.org/products/api)). Enables OA PDF lookup in `add_items_by_doi` and `find_and_attach_pdfs`. If not set, OA PDF features are silently skipped. |
+| `UNSAFE_OPERATIONS` | No | Controls destructive operations (deletion). See [Unsafe Operations](#unsafe-operations) below. Default: `none` (all deletions blocked). |
+
+### Unsafe Operations
+
+By default, the MCP server **does not allow any deletion**. This is a safety measure to prevent an LLM from accidentally deleting items or collections from your library.
+
+To enable deletion, set the `UNSAFE_OPERATIONS` environment variable to one of the following values:
+
+| Value | `delete_items` | `delete_collection` | Use case |
+|---|---|---|---|
+| `none` (default) | Blocked | Blocked | Safe mode — no deletions possible |
+| `items` | **Allowed** | Blocked | Allow deleting items but protect collection structure |
+| `all` | **Allowed** | **Allowed** | Full access — items and collections can be deleted |
+
+**Important notes:**
+
+- If `UNSAFE_OPERATIONS` is not set, empty, or set to an unrecognized value, it defaults to `none`.
+- The value is **case-insensitive** (e.g. `ALL`, `Items`, `NONE` all work).
+- `delete_items` moves items to the Zotero trash (recoverable from the Zotero desktop client).
+- `delete_collection` removes the collection (folder) only — items inside it are **not** deleted and remain in your library.
+- The `all` value includes both item and collection deletion because managing collections inherently requires item-level access.
+
+**Configuration example:**
+
+```json
+{
+  "mcpServers": {
+    "zotero": {
+      "command": "npx",
+      "args": ["-y", "@xevos117/mcp-zotero"],
+      "env": {
+        "ZOTERO_API_KEY": "YOUR_API_KEY",
+        "ZOTERO_USER_ID": "YOUR_USER_ID",
+        "UNSAFE_OPERATIONS": "items"
+      }
+    }
+  }
+}
+```
 
 ## Integration with Claude Desktop
 
@@ -100,6 +140,13 @@ claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"e
 | `find_and_attach_pdfs` | Batch OA PDF lookup and auto-attach via Unpaywall (by item keys or collection) |
 | `add_linked_url_attachment` | Attach a URL to an existing item or create a standalone link |
 
+### Deleting content
+
+| Tool | Description |
+|---|---|
+| `delete_items` | Delete up to 50 items per call (moves to Zotero trash). Requires `UNSAFE_OPERATIONS=items` or `all` |
+| `delete_collection` | Delete a collection (folder). Items inside are kept. Requires `UNSAFE_OPERATIONS=all` |
+
 ### Citation & documents
 
 | Tool | Description |
@@ -112,7 +159,7 @@ claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"e
 ```bash
 npm install
 npm run build          # Compile TypeScript
-npm test               # Run tests (vitest, 328 tests)
+npm test               # Run tests (vitest, 369 tests)
 npx tsx src/server.ts  # Run directly without building
 ```
 

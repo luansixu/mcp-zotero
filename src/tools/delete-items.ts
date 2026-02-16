@@ -31,11 +31,11 @@ export async function handleDeleteItems(
 
   if (!canDeleteItems(unsafeOps)) {
     return formatErrorResponse(
-      "Deletion of items is not allowed. Set the UNSAFE_OPERATIONS environment variable to 'items' or 'both' to enable this operation.",
+      "Deletion of items is not allowed. Set the UNSAFE_OPERATIONS environment variable to 'items' or 'all' to enable this operation.",
       {
         env_var: "UNSAFE_OPERATIONS",
         current_value: unsafeOps,
-        required_values: ["items", "both"],
+        required_values: ["items", "all"],
       }
     );
   }
@@ -59,11 +59,13 @@ export async function handleDeleteItems(
       });
     }
 
-    let maxVersion = 0;
-    for (const item of itemList) {
-      if (item.version !== undefined && item.version > maxVersion) {
-        maxVersion = item.version;
-      }
+    // Use library version from response header (Last-Modified-Version),
+    // not individual item versions — required for multi-object DELETE
+    const libraryVersion = response.getVersion();
+    if (libraryVersion === null) {
+      return formatErrorResponse("Could not determine library version", {
+        item_keys,
+      });
     }
 
     const keysToDelete = [...foundKeys] as string[];
@@ -71,7 +73,7 @@ export async function handleDeleteItems(
     await zoteroApi
       .library("user", userId)
       .items()
-      .version(maxVersion)
+      .version(libraryVersion)
       .delete(keysToDelete);
 
     const result: Record<string, unknown> = {

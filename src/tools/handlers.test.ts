@@ -1734,7 +1734,7 @@ describe("delete_collection", () => {
     expect(parsed.error).toContain("not allowed");
     expect(parsed.env_var).toBe("UNSAFE_OPERATIONS");
     expect(parsed.current_value).toBe("none");
-    expect(parsed.required_values).toEqual(["collections", "both"]);
+    expect(parsed.required_values).toEqual(["all"]);
   });
 
   it("returns permission error when unsafeOps is 'items'", async () => {
@@ -1765,7 +1765,7 @@ describe("delete_collection", () => {
     expect(parsed.error).toContain("not allowed");
   });
 
-  it("deletes collection successfully with 'collections' mode", async () => {
+  it("deletes collection successfully with 'all' mode", async () => {
     const collectionData = { key: "COL001", name: "Test Collection", version: 5 };
     const { mock, deleteStub } = createZoteroApiMock(collectionData);
     const result = await handleToolCall(
@@ -1773,7 +1773,7 @@ describe("delete_collection", () => {
       { collection_key: "COL001" },
       mock,
       TEST_USER_ID,
-      "collections"
+      "all"
     );
 
     const parsed = JSON.parse(result.content[0].text);
@@ -1781,22 +1781,6 @@ describe("delete_collection", () => {
     expect(parsed.collection_key).toBe("COL001");
     expect(parsed.name).toBe("Test Collection");
     expect(deleteStub).toHaveBeenCalled();
-  });
-
-  it("deletes collection successfully with 'both' mode", async () => {
-    const collectionData = { key: "COL001", name: "Test Collection", version: 3 };
-    const { mock } = createZoteroApiMock(collectionData);
-    const result = await handleToolCall(
-      "delete_collection",
-      { collection_key: "COL001" },
-      mock,
-      TEST_USER_ID,
-      "both"
-    );
-
-    const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.deleted).toBe(true);
-    expect(parsed.collection_key).toBe("COL001");
   });
 
   it("returns error for non-existent collection (404)", async () => {
@@ -1810,7 +1794,7 @@ describe("delete_collection", () => {
       { collection_key: "MISSING" },
       mock,
       TEST_USER_ID,
-      "collections"
+      "all"
     );
 
     const parsed = JSON.parse(result.content[0].text);
@@ -1829,7 +1813,7 @@ describe("delete_collection", () => {
       { collection_key: "COL001" },
       mock,
       TEST_USER_ID,
-      "collections"
+      "all"
     );
 
     const parsed = JSON.parse(result.content[0].text);
@@ -1855,22 +1839,7 @@ describe("delete_items", () => {
     expect(parsed.error).toContain("not allowed");
     expect(parsed.env_var).toBe("UNSAFE_OPERATIONS");
     expect(parsed.current_value).toBe("none");
-    expect(parsed.required_values).toEqual(["items", "both"]);
-  });
-
-  it("returns permission error when unsafeOps is 'collections'", async () => {
-    const { mock } = createZoteroApiMock([]);
-    const result = await handleToolCall(
-      "delete_items",
-      { item_keys: ["KEY1"] },
-      mock,
-      TEST_USER_ID,
-      "collections"
-    );
-
-    const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.error).toContain("not allowed");
-    expect(parsed.current_value).toBe("collections");
+    expect(parsed.required_values).toEqual(["items", "all"]);
   });
 
   it("returns permission error when unsafeOps defaults to 'none'", async () => {
@@ -1907,7 +1876,7 @@ describe("delete_items", () => {
     expect(deleteStub).toHaveBeenCalled();
   });
 
-  it("deletes items successfully with 'both' mode", async () => {
+  it("deletes items successfully with 'all' mode", async () => {
     const itemsData = [{ key: "KEY1", version: 2, title: "Item 1" }];
     const { mock } = createZoteroApiMock(itemsData);
     const result = await handleToolCall(
@@ -1915,7 +1884,7 @@ describe("delete_items", () => {
       { item_keys: ["KEY1"] },
       mock,
       TEST_USER_ID,
-      "both"
+      "all"
     );
 
     const parsed = JSON.parse(result.content[0].text);
