@@ -94,7 +94,7 @@ claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"e
 | Tool | Description |
 |---|---|
 | `add_items_by_doi` | Add papers by DOI with automatic metadata resolution. Auto-attaches OA PDFs via Unpaywall |
-| `add_web_item` | Save a web page as a Zotero item (for articles without DOI) |
+| `add_items` | Add items with direct metadata — supports all 37 Zotero item types (books, theses, reports, etc.), batch-capable |
 | `create_collection` | Create a new collection, optionally nested under a parent |
 | `import_pdf_to_zotero` | Download a PDF from URL, upload to Zotero storage, auto-index full text |
 | `find_and_attach_pdfs` | Batch OA PDF lookup and auto-attach via Unpaywall (by item keys or collection) |
@@ -104,7 +104,7 @@ claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"e
 
 | Tool | Description |
 |---|---|
-| `inject_citations` | Inject live Zotero citations into a Word document. Supports APA, IEEE, Vancouver, Harvard, Chicago |
+| `inject_citations` | Inject live Zotero citations into a Word document. Supports APA, IEEE, Vancouver, Harvard, Chicago. Output is saved in the same folder as the input file with a `_cited` suffix (e.g. `paper.docx` → `paper_cited.docx`) |
 | `get_user_id` | Returns the configured Zotero user ID |
 
 ## Development
@@ -112,7 +112,7 @@ claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"e
 ```bash
 npm install
 npm run build          # Compile TypeScript
-npm test               # Run tests (vitest, 299 tests)
+npm test               # Run tests (vitest, 328 tests)
 npx tsx src/server.ts  # Run directly without building
 ```
 

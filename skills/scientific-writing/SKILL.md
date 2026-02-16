@@ -251,6 +251,7 @@ The key insight is: **the workflow is about the PROCESS, not the tools.**
 | `add_linked_url_attachment` | Phase 5: Fallback when PDF import fails |
 | `inject_citations` / skill | Phase 5: Create live Zotero citations in .docx |
 | `add_items_by_doi` | Phase 2: Build bibliography in Zotero |
+| `add_items` | Phase 2: Add books, theses, reports, etc. that do not have a DOI |
 | None of the above | Ask the user to provide source material directly |
 
 **Zotero integration**: If the `zotero-mcp-integrations` skill is available and the user

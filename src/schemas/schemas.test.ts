@@ -8,7 +8,7 @@ import { toolConfig as addItemsByDoiConfig } from "../tools/add-items-by-doi.js"
 import { toolConfig as injectCitationsConfig } from "../tools/inject-citations.js";
 import { toolConfig as getItemFulltextConfig } from "../tools/get-item-fulltext.js";
 import { toolConfig as addLinkedUrlAttachmentConfig } from "../tools/add-linked-url-attachment.js";
-import { toolConfig as addWebItemConfig } from "../tools/add-web-item.js";
+import { toolConfig as addItemsConfig } from "../tools/add-items.js";
 import { toolConfig as importPdfToZoteroConfig } from "../tools/import-pdf-to-zotero.js";
 import { toolConfig as findAndAttachPdfsConfig } from "../tools/find-and-attach-pdfs.js";
 
@@ -21,7 +21,7 @@ const AddItemsByDoiSchema = z.object(addItemsByDoiConfig.inputSchema);
 const InjectCitationsSchema = z.object(injectCitationsConfig.inputSchema);
 const GetItemFulltextSchema = z.object(getItemFulltextConfig.inputSchema);
 const AddLinkedUrlAttachmentSchema = z.object(addLinkedUrlAttachmentConfig.inputSchema);
-const AddWebItemSchema = z.object(addWebItemConfig.inputSchema);
+const AddItemsSchema = z.object(addItemsConfig.inputSchema);
 const ImportPdfToZoteroSchema = z.object(importPdfToZoteroConfig.inputSchema);
 
 describe("GetCollectionItemsSchema", () => {
@@ -304,57 +304,115 @@ describe("AddLinkedUrlAttachmentSchema", () => {
   });
 });
 
-describe("AddWebItemSchema", () => {
-  it("accepts url + title (required fields)", () => {
-    const result = AddWebItemSchema.parse({
-      url: "https://www.nature.com/articles/123",
-      title: "AI in 2024",
+describe("AddItemsSchema", () => {
+  it("accepts valid items array with different item types", () => {
+    const result = AddItemsSchema.parse({
+      items: [
+        { itemType: "journalArticle", title: "A Paper", DOI: "10.1234/test" },
+        { itemType: "book", title: "A Book", publisher: "Penguin" },
+        { itemType: "thesis", title: "My Thesis", university: "MIT" },
+        { itemType: "webpage", title: "A Page", url: "https://example.com" },
+      ],
     });
-    expect(result.url).toBe("https://www.nature.com/articles/123");
-    expect(result.title).toBe("AI in 2024");
+    expect(result.items).toHaveLength(4);
   });
 
-  it("rejects missing url", () => {
+  it("rejects empty items array", () => {
+    expect(() => AddItemsSchema.parse({ items: [] })).toThrow();
+  });
+
+  it("rejects missing items", () => {
+    expect(() => AddItemsSchema.parse({})).toThrow();
+  });
+
+  it("rejects invalid itemType", () => {
     expect(() =>
-      AddWebItemSchema.parse({ title: "AI in 2024" })
+      AddItemsSchema.parse({
+        items: [{ itemType: "invalidType", title: "Test" }],
+      })
     ).toThrow();
   });
 
-  it("rejects missing title", () => {
+  it("rejects invalid field for a given itemType", () => {
     expect(() =>
-      AddWebItemSchema.parse({ url: "https://example.com" })
-    ).toThrow();
+      AddItemsSchema.parse({
+        items: [{ itemType: "book", title: "Test", proceedingsTitle: "Conf" }],
+      })
+    ).toThrow(/not valid for itemType/);
   });
 
-  it("accepts optional website_title, date, and collection_key", () => {
-    const result = AddWebItemSchema.parse({
-      url: "https://www.nature.com/articles/123",
-      title: "AI in 2024",
-      website_title: "Nature News",
-      date: "2024-03-15",
+  it("rejects invalid creatorType for a given itemType", () => {
+    expect(() =>
+      AddItemsSchema.parse({
+        items: [
+          {
+            itemType: "book",
+            title: "Test",
+            creators: [
+              { firstName: "John", lastName: "Smith", creatorType: "director" },
+            ],
+          },
+        ],
+      })
+    ).toThrow(/Invalid creatorType/);
+  });
+
+  it("accepts creators with name (institutional)", () => {
+    const result = AddItemsSchema.parse({
+      items: [
+        {
+          itemType: "report",
+          title: "Test",
+          creators: [{ name: "UNESCO" }],
+        },
+      ],
+    });
+    expect(result.items[0].creators![0].name).toBe("UNESCO");
+  });
+
+  it("defaults creatorType to author", () => {
+    const result = AddItemsSchema.parse({
+      items: [
+        {
+          itemType: "book",
+          title: "Test",
+          creators: [{ firstName: "John", lastName: "Smith" }],
+        },
+      ],
+    });
+    expect(result.items[0].creators![0].creatorType).toBe("author");
+  });
+
+  it("collection_key and tags are optional", () => {
+    const result = AddItemsSchema.parse({
+      items: [{ itemType: "book", title: "Test" }],
       collection_key: "COL001",
+      tags: ["ai", "nlp"],
     });
-    expect(result.website_title).toBe("Nature News");
-    expect(result.date).toBe("2024-03-15");
     expect(result.collection_key).toBe("COL001");
+    expect(result.tags).toEqual(["ai", "nlp"]);
   });
 
-  it("accepts optional creators", () => {
-    const result = AddWebItemSchema.parse({
-      url: "https://example.com",
-      title: "Test",
-      creators: [{ firstName: "John", lastName: "Smith" }],
+  it("accepts items without collection_key and tags", () => {
+    const result = AddItemsSchema.parse({
+      items: [{ itemType: "book", title: "Test" }],
     });
-    expect(result.creators).toEqual([{ firstName: "John", lastName: "Smith" }]);
+    expect(result.collection_key).toBeUndefined();
+    expect(result.tags).toBeUndefined();
   });
 
-  it("accepts optional tags", () => {
-    const result = AddWebItemSchema.parse({
-      url: "https://example.com",
-      title: "Test",
-      tags: ["ai"],
-    });
-    expect(result.tags).toEqual(["ai"]);
+  it("rejects creator with neither name nor firstName+lastName", () => {
+    expect(() =>
+      AddItemsSchema.parse({
+        items: [
+          {
+            itemType: "book",
+            title: "Test",
+            creators: [{ creatorType: "author" }],
+          },
+        ],
+      })
+    ).toThrow();
   });
 });
 

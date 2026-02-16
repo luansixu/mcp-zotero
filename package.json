@@ -12,9 +12,8 @@
     "url": "https://github.com/Xevos117/mcp-zotero/issues"
   },
   "main": "build/server.js",
-  "bin": {
-    "mcp-zotero": "build/server.js"
-  },
+
+  
   "files": [
     "build"
   ],

@@ -80,6 +80,54 @@ describe("cslToZoteroItem", () => {
     expect(result.DOI).toBe("");
     expect(result.publicationTitle).toBe("");
   });
+
+  it("maps new CSL types correctly", () => {
+    const testCases: Array<{ cslType: string; expectedZoteroType: string }> = [
+      { cslType: "article-magazine", expectedZoteroType: "magazineArticle" },
+      { cslType: "article-newspaper", expectedZoteroType: "newspaperArticle" },
+      { cslType: "motion_picture", expectedZoteroType: "film" },
+      { cslType: "legal_case", expectedZoteroType: "case" },
+      { cslType: "legislation", expectedZoteroType: "statute" },
+      { cslType: "post-weblog", expectedZoteroType: "blogPost" },
+      { cslType: "software", expectedZoteroType: "computerProgram" },
+      { cslType: "song", expectedZoteroType: "audioRecording" },
+      { cslType: "speech", expectedZoteroType: "presentation" },
+      { cslType: "graphic", expectedZoteroType: "artwork" },
+      { cslType: "personal_communication", expectedZoteroType: "letter" },
+      { cslType: "broadcast", expectedZoteroType: "tvBroadcast" },
+      { cslType: "entry-dictionary", expectedZoteroType: "dictionaryEntry" },
+      { cslType: "entry-encyclopedia", expectedZoteroType: "encyclopediaArticle" },
+      { cslType: "patent", expectedZoteroType: "patent" },
+      { cslType: "manuscript", expectedZoteroType: "manuscript" },
+      { cslType: "standard", expectedZoteroType: "standard" },
+    ];
+
+    for (const { cslType, expectedZoteroType } of testCases) {
+      const result = cslToZoteroItem({ type: cslType });
+      expect(result.itemType).toBe(expectedZoteroType);
+    }
+  });
+
+  it("maps new CSL fields (ISBN, ISSN, edition, numPages, series, language)", () => {
+    const csl: CslItemData = {
+      type: "book",
+      title: "Test Book",
+      ISBN: "978-0-123456-78-9",
+      ISSN: "1234-5678",
+      edition: "3rd",
+      "number-of-pages": "350",
+      "collection-title": "Test Series",
+      language: "en",
+    };
+
+    const result = cslToZoteroItem(csl);
+    expect(result.ISBN).toBe("978-0-123456-78-9");
+    expect(result.ISSN).toBe("1234-5678");
+    expect(result.edition).toBe("3rd");
+    expect(result.numPages).toBe("350");
+    expect(result.series).toBe("Test Series");
+    expect(result.language).toBe("en");
+  });
 });
 
 describe("zoteroItemToCsl", () => {
@@ -143,5 +191,32 @@ describe("zoteroItemToCsl", () => {
       ],
     });
     expect(result.author).toEqual([{ family: "Smith", given: "John" }]);
+  });
+
+  it("reverse-maps new Zotero types correctly", () => {
+    const testCases: Array<{ zoteroType: string; expectedCslType: string }> = [
+      { zoteroType: "magazineArticle", expectedCslType: "article-magazine" },
+      { zoteroType: "newspaperArticle", expectedCslType: "article-newspaper" },
+      { zoteroType: "film", expectedCslType: "motion_picture" },
+      { zoteroType: "case", expectedCslType: "legal_case" },
+      { zoteroType: "statute", expectedCslType: "legislation" },
+      { zoteroType: "blogPost", expectedCslType: "post-weblog" },
+      { zoteroType: "computerProgram", expectedCslType: "software" },
+      { zoteroType: "audioRecording", expectedCslType: "song" },
+      { zoteroType: "presentation", expectedCslType: "speech" },
+      { zoteroType: "artwork", expectedCslType: "graphic" },
+      { zoteroType: "letter", expectedCslType: "personal_communication" },
+      { zoteroType: "dictionaryEntry", expectedCslType: "entry-dictionary" },
+      { zoteroType: "encyclopediaArticle", expectedCslType: "entry-encyclopedia" },
+      { zoteroType: "patent", expectedCslType: "patent" },
+      { zoteroType: "manuscript", expectedCslType: "manuscript" },
+      { zoteroType: "standard", expectedCslType: "standard" },
+      { zoteroType: "preprint", expectedCslType: "article" },
+    ];
+
+    for (const { zoteroType, expectedCslType } of testCases) {
+      const result = zoteroItemToCsl({ itemType: zoteroType });
+      expect(result.type).toBe(expectedCslType);
+    }
   });
 });
