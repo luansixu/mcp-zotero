@@ -1207,132 +1207,250 @@ describe("add_linked_url_attachment", () => {
   });
 });
 
-// ─── add_web_item ───────────────────────────────────────────────
+// ─── add_items ──────────────────────────────────────────────────
 
-describe("add_web_item", () => {
-  it("creates webpage with minimal args (url + title)", async () => {
+describe("add_items", () => {
+  it("creates single item (book) with minimal fields", async () => {
     const writeData = {
       isSuccess: true,
-      data: [{ key: "WEB001", title: "AI in 2024" }],
+      data: [{ key: "BOOK01", title: "My Book" }],
       errors: {},
     };
     const { mock } = createZoteroApiMock([], writeData);
     const result = await handleToolCall(
-      "add_web_item",
-      { url: "https://www.nature.com/articles/123", title: "AI in 2024" },
-      mock,
-      TEST_USER_ID
-    );
-
-    const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.item_key).toBe("WEB001");
-    expect(parsed.title).toBe("AI in 2024");
-    expect(parsed.url).toBe("https://www.nature.com/articles/123");
-    expect(parsed.item_type).toBe("webpage");
-  });
-
-  it("sets websiteTitle and date", async () => {
-    const writeData = {
-      isSuccess: true,
-      data: [{ key: "WEB002", title: "Test" }],
-      errors: {},
-    };
-    const { mock, postStub } = createZoteroApiMock([], writeData);
-    await handleToolCall(
-      "add_web_item",
+      "add_items",
       {
-        url: "https://example.com",
-        title: "Test",
-        website_title: "Nature News",
-        date: "2024-03-15",
+        items: [
+          { itemType: "book", title: "My Book", publisher: "Penguin" },
+        ],
       },
       mock,
       TEST_USER_ID
     );
 
-    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
-    expect(postedData[0]).toHaveProperty("websiteTitle", "Nature News");
-    expect(postedData[0]).toHaveProperty("date", "2024-03-15");
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.success).toHaveLength(1);
+    expect(parsed.success[0].item_key).toBe("BOOK01");
+    expect(parsed.success[0].title).toBe("My Book");
+    expect(parsed.success[0].item_type).toBe("book");
   });
 
-  it("sets accessDate automatically", async () => {
+  it("creates batch of mixed types (journalArticle + book + thesis)", async () => {
     const writeData = {
       isSuccess: true,
-      data: [{ key: "WEB003", title: "Test" }],
+      data: [
+        { key: "ART01", title: "Paper" },
+        { key: "BOOK02", title: "Book" },
+        { key: "THE01", title: "Thesis" },
+      ],
       errors: {},
     };
-    const { mock, postStub } = createZoteroApiMock([], writeData);
-    await handleToolCall(
-      "add_web_item",
-      { url: "https://example.com", title: "Test" },
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_items",
+      {
+        items: [
+          { itemType: "journalArticle", title: "Paper", DOI: "10.1234/test" },
+          { itemType: "book", title: "Book", publisher: "Publisher" },
+          { itemType: "thesis", title: "Thesis", university: "MIT" },
+        ],
+      },
       mock,
       TEST_USER_ID
     );
 
-    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
-    expect(postedData[0]).toHaveProperty("accessDate");
-    // Should be YYYY-MM-DD format
-    expect(postedData[0].accessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.success).toHaveLength(3);
+    expect(parsed.success[0].item_type).toBe("journalArticle");
+    expect(parsed.success[1].item_type).toBe("book");
+    expect(parsed.success[2].item_type).toBe("thesis");
   });
 
-  it("adds to collection with collection_key", async () => {
+  it("applies collection_key and tags to all items", async () => {
     const writeData = {
       isSuccess: true,
-      data: [{ key: "WEB004", title: "Test" }],
+      data: [{ key: "ITEM01", title: "Test" }],
       errors: {},
     };
     const { mock, postStub } = createZoteroApiMock([], writeData);
     await handleToolCall(
-      "add_web_item",
-      { url: "https://example.com", title: "Test", collection_key: "COL001" },
+      "add_items",
+      {
+        items: [{ itemType: "book", title: "Test" }],
+        collection_key: "COL001",
+        tags: ["ai", "nlp"],
+      },
       mock,
       TEST_USER_ID
     );
 
     const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
     expect(postedData[0]).toHaveProperty("collections", ["COL001"]);
+    expect(postedData[0]).toHaveProperty("tags", [
+      { tag: "ai" },
+      { tag: "nlp" },
+    ]);
   });
 
-  it("converts creators with creatorType author", async () => {
+  it("sets accessDate when url is provided", async () => {
     const writeData = {
       isSuccess: true,
-      data: [{ key: "WEB005", title: "Test" }],
+      data: [{ key: "WEB01", title: "Test" }],
       errors: {},
     };
     const { mock, postStub } = createZoteroApiMock([], writeData);
     await handleToolCall(
-      "add_web_item",
+      "add_items",
       {
-        url: "https://example.com",
-        title: "Test",
-        creators: [{ firstName: "John", lastName: "Smith" }],
+        items: [
+          {
+            itemType: "webpage",
+            title: "Test",
+            url: "https://example.com",
+          },
+        ],
       },
       mock,
       TEST_USER_ID
     );
 
     const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
-    expect(postedData[0]).toHaveProperty("creators", [
-      { firstName: "John", lastName: "Smith", creatorType: "author" },
-    ]);
+    expect(postedData[0]).toHaveProperty("accessDate");
+    expect(postedData[0].accessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it("returns error when POST fails", async () => {
+  it("returns per-item success with item_key, title, item_type", async () => {
     const writeData = {
-      isSuccess: false,
-      data: [],
-      errors: { "0": "Invalid item data" },
+      isSuccess: true,
+      data: [{ key: "RES01", title: "Result" }],
+      errors: {},
     };
     const { mock } = createZoteroApiMock([], writeData);
     const result = await handleToolCall(
-      "add_web_item",
-      { url: "https://example.com", title: "Test" },
+      "add_items",
+      {
+        items: [{ itemType: "report", title: "Result", institution: "MIT" }],
+      },
       mock,
       TEST_USER_ID
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.error).toBe("Failed to create web page item");
+    expect(parsed.success[0]).toEqual({
+      index: 0,
+      item_key: "RES01",
+      title: "Result",
+      item_type: "report",
+    });
+  });
+
+  it("returns partial success when some items fail in batch", async () => {
+    const writeData = {
+      isSuccess: false,
+      data: [{ key: "OK01", title: "Good" }],
+      errors: { "1": "Invalid field" },
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_items",
+      {
+        items: [
+          { itemType: "book", title: "Good", publisher: "Pub" },
+          { itemType: "book", title: "Bad" },
+        ],
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.success).toHaveLength(1);
+    expect(parsed.success[0].item_key).toBe("OK01");
+    expect(parsed.failed).toHaveLength(1);
+    expect(parsed.failed[0].error).toBe("Invalid field");
+  });
+
+  it("returns error when all items fail", async () => {
+    const writeData = {
+      isSuccess: false,
+      data: [],
+      errors: { "0": "Bad data" },
+    };
+    const { mock } = createZoteroApiMock([], writeData);
+    const result = await handleToolCall(
+      "add_items",
+      {
+        items: [{ itemType: "book", title: "Bad" }],
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("All items failed to create");
+    expect(parsed.failed).toHaveLength(1);
+  });
+
+  it("handles creators with various creatorTypes", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "FILM01", title: "Movie" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_items",
+      {
+        items: [
+          {
+            itemType: "film",
+            title: "Movie",
+            creators: [
+              { firstName: "Steven", lastName: "Spielberg", creatorType: "director" },
+              { name: "DreamWorks", creatorType: "producer" },
+            ],
+          },
+        ],
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    const creators = postedData[0].creators as Record<string, string>[];
+    expect(creators).toHaveLength(2);
+    expect(creators[0]).toEqual({
+      firstName: "Steven",
+      lastName: "Spielberg",
+      creatorType: "director",
+    });
+    expect(creators[1]).toEqual({
+      name: "DreamWorks",
+      creatorType: "producer",
+    });
+  });
+
+  it("maps title to caseName for case type", async () => {
+    const writeData = {
+      isSuccess: true,
+      data: [{ key: "CASE01", title: "Test v. State" }],
+      errors: {},
+    };
+    const { mock, postStub } = createZoteroApiMock([], writeData);
+    await handleToolCall(
+      "add_items",
+      {
+        items: [
+          { itemType: "case", title: "Test v. State", court: "Supreme Court" },
+        ],
+      },
+      mock,
+      TEST_USER_ID
+    );
+
+    const postedData = postStub.mock.calls[0][0] as Record<string, unknown>[];
+    expect(postedData[0]).toHaveProperty("caseName", "Test v. State");
+    expect(postedData[0]).not.toHaveProperty("title");
   });
 });
 

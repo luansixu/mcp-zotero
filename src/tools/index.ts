@@ -10,7 +10,7 @@ import { handleInjectCitations, toolConfig as injectCitationsConfig } from "./in
 import { handleGetItemFulltext, toolConfig as getItemFulltextConfig } from "./get-item-fulltext.js";
 import { handleGetUserId, toolConfig as getUserIdConfig } from "./get-user-id.js";
 import { handleAddLinkedUrlAttachment, toolConfig as addLinkedUrlAttachmentConfig } from "./add-linked-url-attachment.js";
-import { handleAddWebItem, toolConfig as addWebItemConfig } from "./add-web-item.js";
+import { handleAddItems, toolConfig as addItemsConfig } from "./add-items.js";
 import { handleImportPdfToZotero, toolConfig as importPdfToZoteroConfig } from "./import-pdf-to-zotero.js";
 import { handleFindAndAttachPdfs, toolConfig as findAndAttachPdfsConfig } from "./find-and-attach-pdfs.js";
 
@@ -33,7 +33,7 @@ const handlers: Record<string, ToolHandler> = {
   get_item_fulltext: handleGetItemFulltext,
   get_user_id: handleGetUserId,
   add_linked_url_attachment: handleAddLinkedUrlAttachment,
-  add_web_item: handleAddWebItem,
+  add_items: handleAddItems,
   import_pdf_to_zotero: handleImportPdfToZotero,
   find_and_attach_pdfs: handleFindAndAttachPdfs,
 };
@@ -62,7 +62,7 @@ const toolConfigs = [
   { config: getItemFulltextConfig, handler: handleGetItemFulltext },
   { config: getUserIdConfig, handler: handleGetUserId },
   { config: addLinkedUrlAttachmentConfig, handler: handleAddLinkedUrlAttachment },
-  { config: addWebItemConfig, handler: handleAddWebItem },
+  { config: addItemsConfig, handler: handleAddItems },
   { config: importPdfToZoteroConfig, handler: handleImportPdfToZotero },
   { config: findAndAttachPdfsConfig, handler: handleFindAndAttachPdfs },
 ];

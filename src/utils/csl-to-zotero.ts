@@ -2,26 +2,81 @@ import { CslItemData, CslName } from "../types/csl-types.js";
 import { ZoteroItemData } from "../types/zotero-types.js";
 
 const CSL_TO_ZOTERO_TYPE: Record<string, string> = {
+  "article": "journalArticle",
   "article-journal": "journalArticle",
-  book: "book",
-  chapter: "bookSection",
+  "article-magazine": "magazineArticle",
+  "article-newspaper": "newspaperArticle",
+  "bill": "bill",
+  "book": "book",
+  "broadcast": "tvBroadcast",
+  "chapter": "bookSection",
+  "dataset": "dataset",
+  "document": "document",
+  "entry-dictionary": "dictionaryEntry",
+  "entry-encyclopedia": "encyclopediaArticle",
+  "figure": "artwork",
+  "graphic": "artwork",
+  "hearing": "hearing",
+  "interview": "interview",
+  "legal_case": "case",
+  "legislation": "statute",
+  "manuscript": "manuscript",
+  "map": "map",
+  "motion_picture": "film",
   "paper-conference": "conferencePaper",
-  report: "report",
-  thesis: "thesis",
-  webpage: "webpage",
-  dataset: "document",
-  article: "journalArticle",
+  "patent": "patent",
+  "personal_communication": "letter",
+  "post": "forumPost",
+  "post-weblog": "blogPost",
+  "report": "report",
+  "review": "journalArticle",
+  "review-book": "journalArticle",
+  "software": "computerProgram",
+  "song": "audioRecording",
+  "speech": "presentation",
+  "standard": "standard",
+  "thesis": "thesis",
+  "webpage": "webpage",
 };
 
 const ZOTERO_TO_CSL_TYPE: Record<string, string> = {
   journalArticle: "article-journal",
+  magazineArticle: "article-magazine",
+  newspaperArticle: "article-newspaper",
+  bill: "bill",
   book: "book",
+  tvBroadcast: "broadcast",
   bookSection: "chapter",
+  dataset: "dataset",
+  document: "document",
+  dictionaryEntry: "entry-dictionary",
+  encyclopediaArticle: "entry-encyclopedia",
+  artwork: "graphic",
+  hearing: "hearing",
+  interview: "interview",
+  case: "legal_case",
+  statute: "legislation",
+  manuscript: "manuscript",
+  map: "map",
+  film: "motion_picture",
   conferencePaper: "paper-conference",
+  patent: "patent",
+  letter: "personal_communication",
+  forumPost: "post",
+  blogPost: "post-weblog",
   report: "report",
+  computerProgram: "software",
+  audioRecording: "song",
+  presentation: "speech",
+  standard: "standard",
   thesis: "thesis",
   webpage: "webpage",
-  document: "dataset",
+  radioBroadcast: "broadcast",
+  videoRecording: "motion_picture",
+  preprint: "article",
+  podcast: "song",
+  email: "personal_communication",
+  instantMessage: "personal_communication",
 };
 
 interface ZoteroItemPayload {
@@ -42,6 +97,12 @@ interface ZoteroItemPayload {
   place: string;
   url: string;
   abstractNote: string;
+  ISBN: string;
+  ISSN: string;
+  edition: string;
+  numPages: string;
+  series: string;
+  language: string;
   collections: string[];
   tags: Array<{ tag: string }>;
 }
@@ -85,6 +146,12 @@ export function cslToZoteroItem(
     place: csl["publisher-place"] ?? "",
     url: csl.URL ?? "",
     abstractNote: csl.abstract ?? "",
+    ISBN: csl.ISBN ?? "",
+    ISSN: csl.ISSN ?? "",
+    edition: csl.edition ?? "",
+    numPages: csl["number-of-pages"] ?? "",
+    series: csl["collection-title"] ?? "",
+    language: csl.language ?? "",
     collections,
     tags,
   };

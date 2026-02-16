@@ -54,6 +54,7 @@ The script has a built-in fallback: if the ESM import fails, it tries `createReq
 Use MCP tools to find or add papers:
 - `search_library` — search existing Zotero library
 - `add_items_by_doi` — add new papers by DOI, returns item keys
+- `add_items` — add items by providing metadata directly (books, theses, reports, etc. — all 37 Zotero types, batch-capable)
 - `get_collections` / `get_collection_items` — browse collections
 - `find_and_attach_pdfs` — batch lookup and attach OA PDFs for items (by keys or collection)
 
