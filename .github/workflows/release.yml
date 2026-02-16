@@ -4,6 +4,10 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.1.0). Creates the release if it doesn't exist."
+        required: true
 
 permissions:
   contents: write   # needed to upload release assets
@@ -58,16 +62,17 @@ jobs:
           done
           ls -lh dist-skills/
 
-      - name: Resolve release tag
+      - name: Resolve or create release
         id: tag
-        run: |
-          TAG="${{ github.event.release.tag_name }}"
-          if [ -z "$TAG" ]; then
-            TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
-          fi
-          echo "name=$TAG" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          # Create the release if it doesn't exist yet
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Upload zips to GitHub Release
         env:
