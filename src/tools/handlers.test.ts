@@ -1717,6 +1717,285 @@ describe("import_pdf_to_zotero", () => {
   });
 });
 
+// ─── delete_collection ──────────────────────────────────────────
+
+describe("delete_collection", () => {
+  it("returns permission error when unsafeOps is 'none'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID,
+      "none"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+    expect(parsed.env_var).toBe("UNSAFE_OPERATIONS");
+    expect(parsed.current_value).toBe("none");
+    expect(parsed.required_values).toEqual(["collections", "both"]);
+  });
+
+  it("returns permission error when unsafeOps is 'items'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+    expect(parsed.current_value).toBe("items");
+  });
+
+  it("returns permission error when unsafeOps defaults to 'none'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+  });
+
+  it("deletes collection successfully with 'collections' mode", async () => {
+    const collectionData = { key: "COL001", name: "Test Collection", version: 5 };
+    const { mock, deleteStub } = createZoteroApiMock(collectionData);
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID,
+      "collections"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.deleted).toBe(true);
+    expect(parsed.collection_key).toBe("COL001");
+    expect(parsed.name).toBe("Test Collection");
+    expect(deleteStub).toHaveBeenCalled();
+  });
+
+  it("deletes collection successfully with 'both' mode", async () => {
+    const collectionData = { key: "COL001", name: "Test Collection", version: 3 };
+    const { mock } = createZoteroApiMock(collectionData);
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID,
+      "both"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.deleted).toBe(true);
+    expect(parsed.collection_key).toBe("COL001");
+  });
+
+  it("returns error for non-existent collection (404)", async () => {
+    const { mock, getStub } = createZoteroApiMock([]);
+    const error404 = new Error("Not found") as Error & { response?: { status: number } };
+    error404.response = { status: 404 };
+    getStub.mockRejectedValueOnce(error404);
+
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "MISSING" },
+      mock,
+      TEST_USER_ID,
+      "collections"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Collection not found");
+    expect(parsed.status).toBe("not_found");
+  });
+
+  it("returns error on version conflict (412)", async () => {
+    const { mock, getStub } = createZoteroApiMock([]);
+    const error412 = new Error("Precondition failed") as Error & { response?: { status: number } };
+    error412.response = { status: 412 };
+    getStub.mockRejectedValueOnce(error412);
+
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID,
+      "collections"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("modified by another client");
+    expect(parsed.status).toBe("version_conflict");
+  });
+});
+
+// ─── delete_items ───────────────────────────────────────────────
+
+describe("delete_items", () => {
+  it("returns permission error when unsafeOps is 'none'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1"] },
+      mock,
+      TEST_USER_ID,
+      "none"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+    expect(parsed.env_var).toBe("UNSAFE_OPERATIONS");
+    expect(parsed.current_value).toBe("none");
+    expect(parsed.required_values).toEqual(["items", "both"]);
+  });
+
+  it("returns permission error when unsafeOps is 'collections'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1"] },
+      mock,
+      TEST_USER_ID,
+      "collections"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+    expect(parsed.current_value).toBe("collections");
+  });
+
+  it("returns permission error when unsafeOps defaults to 'none'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1"] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+  });
+
+  it("deletes items successfully with 'items' mode", async () => {
+    const itemsData = [
+      { key: "KEY1", version: 5, title: "Item 1" },
+      { key: "KEY2", version: 3, title: "Item 2" },
+    ];
+    const { mock, deleteStub } = createZoteroApiMock(itemsData);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1", "KEY2"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.deleted_count).toBe(2);
+    expect(parsed.deleted_keys).toEqual(expect.arrayContaining(["KEY1", "KEY2"]));
+    expect(parsed.not_found).toBeUndefined();
+    expect(deleteStub).toHaveBeenCalled();
+  });
+
+  it("deletes items successfully with 'both' mode", async () => {
+    const itemsData = [{ key: "KEY1", version: 2, title: "Item 1" }];
+    const { mock } = createZoteroApiMock(itemsData);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1"] },
+      mock,
+      TEST_USER_ID,
+      "both"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.deleted_count).toBe(1);
+    expect(parsed.deleted_keys).toEqual(["KEY1"]);
+  });
+
+  it("reports not_found keys in partial deletion", async () => {
+    const itemsData = [{ key: "KEY1", version: 4, title: "Item 1" }];
+    const { mock } = createZoteroApiMock(itemsData);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1", "MISSING1"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.deleted_count).toBe(1);
+    expect(parsed.deleted_keys).toEqual(["KEY1"]);
+    expect(parsed.not_found).toEqual(["MISSING1"]);
+  });
+
+  it("returns error when all keys not found", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["MISS1", "MISS2"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("No items found for the given keys");
+    expect(parsed.status).toBe("not_found");
+  });
+
+  it("returns error on version conflict (412)", async () => {
+    const itemsData = [{ key: "KEY1", version: 5, title: "Item 1" }];
+    const { mock, getStub, deleteStub } = createZoteroApiMock(itemsData);
+    const error412 = new Error("Precondition failed") as Error & { response?: { status: number } };
+    error412.response = { status: 412 };
+    // First get succeeds (returns items), then delete throws 412
+    deleteStub.mockRejectedValueOnce(error412);
+
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("modified by another client");
+    expect(parsed.status).toBe("version_conflict");
+  });
+
+  it("passes correct keys to delete API call", async () => {
+    const itemsData = [
+      { key: "KEY1", version: 10, title: "Item 1" },
+      { key: "KEY2", version: 8, title: "Item 2" },
+    ];
+    const { mock, deleteStub } = createZoteroApiMock(itemsData);
+    await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1", "KEY2"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    expect(deleteStub).toHaveBeenCalledWith(
+      expect.arrayContaining(["KEY1", "KEY2"])
+    );
+  });
+});
+
 // ─── Unknown tool ───────────────────────────────────────────────
 
 describe("Unknown tool", () => {

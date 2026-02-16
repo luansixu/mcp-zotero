@@ -6,6 +6,7 @@ import { createRequire } from "module";
 import { ZoteroApiInterface } from "./types/zotero-types.js";
 import { registerAllTools } from "./tools/index.js";
 import { logger } from "./utils/logger.js";
+import { parseUnsafeOperations, UnsafeOperationsMode } from "./utils/unsafe-operations.js";
 
 // Re-export for backward compatibility with existing tests
 export { formatErrorResponse } from "./utils/error-formatter.js";
@@ -21,6 +22,7 @@ class ZoteroServer {
   private server: McpServer;
   private zoteroApi: ZoteroApiInterface;
   private userId: string;
+  private unsafeOps: UnsafeOperationsMode;
 
   constructor(options: ZoteroServerOptions = {}) {
     this.server = new McpServer(
@@ -44,6 +46,8 @@ class ZoteroServer {
       }
     );
 
+    this.unsafeOps = parseUnsafeOperations(process.env.UNSAFE_OPERATIONS);
+
     if (options.zoteroApi) {
       this.userId = options.userId || "";
       this.zoteroApi = options.zoteroApi;
@@ -63,7 +67,7 @@ class ZoteroServer {
   }
 
   private setupHandlers() {
-    registerAllTools(this.server, this.zoteroApi, this.userId);
+    registerAllTools(this.server, this.zoteroApi, this.userId, this.unsafeOps);
   }
 
   async start() {

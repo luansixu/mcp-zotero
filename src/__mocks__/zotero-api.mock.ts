@@ -71,11 +71,16 @@ export function createZoteroApiMock(
     getEntityByIndex: (index: number) => defaultWriteData.data[index],
   });
 
+  const deleteStub = vi.fn().mockResolvedValue({
+    getVersion: () => 1,
+  });
+
   const chainable: Record<string, unknown> = {};
   const handler: ProxyHandler<Record<string, unknown>> = {
     get(_target, prop) {
       if (prop === "get") return getStub;
       if (prop === "post") return postStub;
+      if (prop === "delete") return deleteStub;
       // All other methods return the proxy itself (chainable)
       return (..._args: unknown[]) => new Proxy(chainable, handler);
     },
@@ -83,5 +88,5 @@ export function createZoteroApiMock(
 
   const mock = new Proxy(chainable, handler);
 
-  return { mock, getStub, postStub };
+  return { mock, getStub, postStub, deleteStub };
 }

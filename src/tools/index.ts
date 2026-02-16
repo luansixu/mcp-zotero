@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ZoteroApiInterface } from "../types/zotero-types.js";
+import { UnsafeOperationsMode } from "../utils/unsafe-operations.js";
 import { handleGetCollections, toolConfig as collectionsConfig } from "./get-collections.js";
 import { handleGetCollectionItems, toolConfig as collectionItemsConfig } from "./get-collection-items.js";
 import { handleGetItemsDetails, toolConfig as itemsDetailsConfig } from "./get-items-details.js";
@@ -13,13 +14,16 @@ import { handleAddLinkedUrlAttachment, toolConfig as addLinkedUrlAttachmentConfi
 import { handleAddItems, toolConfig as addItemsConfig } from "./add-items.js";
 import { handleImportPdfToZotero, toolConfig as importPdfToZoteroConfig } from "./import-pdf-to-zotero.js";
 import { handleFindAndAttachPdfs, toolConfig as findAndAttachPdfsConfig } from "./find-and-attach-pdfs.js";
+import { handleDeleteCollection, toolConfig as deleteCollectionConfig } from "./delete-collection.js";
+import { handleDeleteItems, toolConfig as deleteItemsConfig } from "./delete-items.js";
 
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 type ToolHandler = (
   zoteroApi: ZoteroApiInterface,
   userId: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  unsafeOps?: UnsafeOperationsMode
 ) => Promise<CallToolResult>;
 
 const handlers: Record<string, ToolHandler> = {
@@ -36,19 +40,22 @@ const handlers: Record<string, ToolHandler> = {
   add_items: handleAddItems,
   import_pdf_to_zotero: handleImportPdfToZotero,
   find_and_attach_pdfs: handleFindAndAttachPdfs,
+  delete_collection: handleDeleteCollection,
+  delete_items: handleDeleteItems,
 };
 
 export async function handleToolCall(
   name: string,
   args: Record<string, unknown>,
   zoteroApi: ZoteroApiInterface,
-  userId: string
+  userId: string,
+  unsafeOps: UnsafeOperationsMode = "none"
 ): Promise<CallToolResult> {
   const handler = handlers[name];
   if (!handler) {
     throw new Error(`Unknown tool: ${name}`);
   }
-  return handler(zoteroApi, userId, args);
+  return handler(zoteroApi, userId, args, unsafeOps);
 }
 
 const toolConfigs = [
@@ -65,19 +72,22 @@ const toolConfigs = [
   { config: addItemsConfig, handler: handleAddItems },
   { config: importPdfToZoteroConfig, handler: handleImportPdfToZotero },
   { config: findAndAttachPdfsConfig, handler: handleFindAndAttachPdfs },
+  { config: deleteCollectionConfig, handler: handleDeleteCollection },
+  { config: deleteItemsConfig, handler: handleDeleteItems },
 ];
 
 export function registerAllTools(
   server: McpServer,
   zoteroApi: ZoteroApiInterface,
-  userId: string
+  userId: string,
+  unsafeOps: UnsafeOperationsMode = "none"
 ): void {
   for (const { config, handler } of toolConfigs) {
     server.registerTool(config.name, {
       description: config.description,
       inputSchema: config.inputSchema,
     }, async (args: Record<string, unknown>) => {
-      return handler(zoteroApi, userId, args);
+      return handler(zoteroApi, userId, args, unsafeOps);
     });
   }
 }

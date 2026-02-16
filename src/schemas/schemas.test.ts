@@ -11,6 +11,8 @@ import { toolConfig as addLinkedUrlAttachmentConfig } from "../tools/add-linked-
 import { toolConfig as addItemsConfig } from "../tools/add-items.js";
 import { toolConfig as importPdfToZoteroConfig } from "../tools/import-pdf-to-zotero.js";
 import { toolConfig as findAndAttachPdfsConfig } from "../tools/find-and-attach-pdfs.js";
+import { toolConfig as deleteCollectionConfig } from "../tools/delete-collection.js";
+import { toolConfig as deleteItemsConfig } from "../tools/delete-items.js";
 
 const GetCollectionItemsSchema = z.object(collectionItemsConfig.inputSchema);
 const FindAndAttachPdfsSchema = z.object(findAndAttachPdfsConfig.inputSchema);
@@ -23,6 +25,8 @@ const GetItemFulltextSchema = z.object(getItemFulltextConfig.inputSchema);
 const AddLinkedUrlAttachmentSchema = z.object(addLinkedUrlAttachmentConfig.inputSchema);
 const AddItemsSchema = z.object(addItemsConfig.inputSchema);
 const ImportPdfToZoteroSchema = z.object(importPdfToZoteroConfig.inputSchema);
+const DeleteCollectionSchema = z.object(deleteCollectionConfig.inputSchema);
+const DeleteItemsSchema = z.object(deleteItemsConfig.inputSchema);
 
 describe("GetCollectionItemsSchema", () => {
   it("accepts valid collectionKey", () => {
@@ -499,5 +503,59 @@ describe("FindAndAttachPdfsSchema", () => {
     });
     expect(result.skip_if_attachment_exists).toBe(false);
     expect(result.dry_run).toBe(true);
+  });
+});
+
+describe("DeleteCollectionSchema", () => {
+  it("accepts valid collection_key", () => {
+    const result = DeleteCollectionSchema.parse({ collection_key: "COL001" });
+    expect(result.collection_key).toBe("COL001");
+  });
+
+  it("rejects missing collection_key", () => {
+    expect(() => DeleteCollectionSchema.parse({})).toThrow();
+  });
+
+  it("rejects non-string collection_key", () => {
+    expect(() => DeleteCollectionSchema.parse({ collection_key: 123 })).toThrow();
+  });
+
+  it("rejects empty string collection_key", () => {
+    expect(() => DeleteCollectionSchema.parse({ collection_key: "" })).toThrow();
+  });
+});
+
+describe("DeleteItemsSchema", () => {
+  it("accepts valid item_keys array", () => {
+    const result = DeleteItemsSchema.parse({ item_keys: ["KEY1", "KEY2"] });
+    expect(result.item_keys).toEqual(["KEY1", "KEY2"]);
+  });
+
+  it("accepts single item key", () => {
+    const result = DeleteItemsSchema.parse({ item_keys: ["KEY1"] });
+    expect(result.item_keys).toHaveLength(1);
+  });
+
+  it("rejects missing item_keys", () => {
+    expect(() => DeleteItemsSchema.parse({})).toThrow();
+  });
+
+  it("rejects empty item_keys array", () => {
+    expect(() => DeleteItemsSchema.parse({ item_keys: [] })).toThrow();
+  });
+
+  it("rejects non-array item_keys", () => {
+    expect(() => DeleteItemsSchema.parse({ item_keys: "KEY1" })).toThrow();
+  });
+
+  it("rejects more than 50 item keys", () => {
+    const keys = Array.from({ length: 51 }, (_, i) => `KEY${i}`);
+    expect(() => DeleteItemsSchema.parse({ item_keys: keys })).toThrow();
+  });
+
+  it("accepts exactly 50 item keys", () => {
+    const keys = Array.from({ length: 50 }, (_, i) => `KEY${i}`);
+    const result = DeleteItemsSchema.parse({ item_keys: keys });
+    expect(result.item_keys).toHaveLength(50);
   });
 });
