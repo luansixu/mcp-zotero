@@ -96,13 +96,15 @@ describe("get_collection_items", () => {
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].title).toBe("Deep Learning for Natural Language Processing");
-    expect(parsed[0].authors).toBe("John Smith, Jane Doe");
-    expect(parsed[0].date).toBe("2024-01-15");
-    expect(parsed[0].key).toBe("ABC12345");
-    expect(parsed[0].doi).toBe("10.1234/example.2024.001");
-    expect(parsed[0].tags).toEqual(["deep-learning", "NLP"]);
+    expect(parsed.total_items).toBe(1);
+    expect(parsed.returned_items).toBe(1);
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0].title).toBe("Deep Learning for Natural Language Processing");
+    expect(parsed.items[0].authors).toBe("John Smith, Jane Doe");
+    expect(parsed.items[0].date).toBe("2024-01-15");
+    expect(parsed.items[0].key).toBe("ABC12345");
+    expect(parsed.items[0].doi).toBe("10.1234/example.2024.001");
+    expect(parsed.items[0].tags).toEqual(["deep-learning", "NLP"]);
   });
 
   it("uses fallback values for minimal items", async () => {
@@ -115,11 +117,11 @@ describe("get_collection_items", () => {
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed[0].title).toBe("Untitled");
-    expect(parsed[0].authors).toBe("No authors listed");
-    expect(parsed[0].date).toBe("No date");
-    expect(parsed[0].doi).toBeNull();
-    expect(parsed[0].tags).toEqual([]);
+    expect(parsed.items[0].title).toBe("Untitled");
+    expect(parsed.items[0].authors).toBe("No authors listed");
+    expect(parsed.items[0].date).toBe("No date");
+    expect(parsed.items[0].doi).toBeNull();
+    expect(parsed.items[0].tags).toEqual([]);
   });
 
   it("returns error for empty collection", async () => {
@@ -148,8 +150,10 @@ describe("get_collection_items", () => {
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].key).toBe("ABC12345");
+    expect(parsed.total_items).toBe(3);
+    expect(parsed.returned_items).toBe(1);
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0].key).toBe("ABC12345");
   });
 
   it("includes attachments and notes when excludeAttachments is false", async () => {
@@ -163,7 +167,9 @@ describe("get_collection_items", () => {
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toHaveLength(2);
+    expect(parsed.total_items).toBe(2);
+    expect(parsed.returned_items).toBe(2);
+    expect(parsed.items).toHaveLength(2);
   });
 
   it("returns not_found error on 404", async () => {
@@ -1962,6 +1968,108 @@ describe("delete_items", () => {
     expect(deleteStub).toHaveBeenCalledWith(
       expect.arrayContaining(["KEY1", "KEY2"])
     );
+  });
+});
+
+// ─── Pagination integration tests ───────────────────────────────
+
+describe("pagination: get_collection_items", () => {
+  it("fetches all items across multiple pages (150 items)", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      key: `K${i}`,
+      itemType: "journalArticle",
+      title: `Paper ${i}`,
+    }));
+    const page2 = Array.from({ length: 50 }, (_, i) => ({
+      key: `K${100 + i}`,
+      itemType: "journalArticle",
+      title: `Paper ${100 + i}`,
+    }));
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub
+      .mockResolvedValueOnce({ getData: () => page1, getTotalResults: () => 150 })
+      .mockResolvedValueOnce({ getData: () => page2, getTotalResults: () => 150 });
+
+    const result = await handleToolCall(
+      "get_collection_items",
+      { collectionKey: "COL001" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.total_items).toBe(150);
+    expect(parsed.returned_items).toBe(150);
+    expect(parsed.items).toHaveLength(150);
+    expect(getStub).toHaveBeenCalledTimes(2);
+    expect(getStub).toHaveBeenCalledWith({ limit: 100, start: 0 });
+    expect(getStub).toHaveBeenCalledWith({ limit: 100, start: 100 });
+  });
+});
+
+describe("pagination: get_collections", () => {
+  it("fetches all collections across multiple pages (130 collections)", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      key: `C${i}`,
+      name: `Collection ${i}`,
+    }));
+    const page2 = Array.from({ length: 30 }, (_, i) => ({
+      key: `C${100 + i}`,
+      name: `Collection ${100 + i}`,
+    }));
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub
+      .mockResolvedValueOnce({ getData: () => page1, getTotalResults: () => 130 })
+      .mockResolvedValueOnce({ getData: () => page2, getTotalResults: () => 130 });
+
+    const result = await handleToolCall("get_collections", {}, mock, TEST_USER_ID);
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveLength(130);
+    expect(getStub).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("pagination: find_and_attach_pdfs with collection_key", () => {
+  it("fetches all collection items across multiple pages (120 items)", async () => {
+    const ORIGINAL_ENV = process.env;
+    process.env = { ...ORIGINAL_ENV, ZOTERO_API_KEY: "test-api-key" };
+
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      key: `K${i}`,
+      itemType: "journalArticle",
+    }));
+    const page2 = Array.from({ length: 20 }, (_, i) => ({
+      key: `K${100 + i}`,
+      itemType: "journalArticle",
+    }));
+    // Metadata items (only first 100 via itemKey batch)
+    const allItems = [...page1, ...page2].map((item) => ({
+      ...item,
+      DOI: `10.1234/${item.key}`,
+    }));
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    // Page 1 of collection items (via fetchAllPages)
+    getStub.mockResolvedValueOnce({ getData: () => page1, getTotalResults: () => 120 });
+    // Page 2 of collection items (via fetchAllPages)
+    getStub.mockResolvedValueOnce({ getData: () => page2, getTotalResults: () => 120 });
+    // Batch metadata fetch — returns items with DOIs
+    getStub.mockResolvedValueOnce({ getData: () => allItems, getTotalResults: () => 120 });
+
+    const result = await handleToolCall(
+      "find_and_attach_pdfs",
+      { collection_key: "COL001", dry_run: true, skip_if_attachment_exists: false },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.processed).toBe(120);
+
+    process.env = ORIGINAL_ENV;
   });
 });
 

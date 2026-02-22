@@ -5,6 +5,7 @@ import { logger } from "../utils/logger.js";
 import { lookupOaPdfWithFallbacks } from "../utils/unpaywall.js";
 import { downloadAndUploadPdf } from "../utils/pdf-uploader.js";
 import { mapWithConcurrency } from "../utils/concurrency.js";
+import { fetchAllPages } from "../utils/pagination.js";
 
 export const toolConfig = {
   name: "find_and_attach_pdfs",
@@ -68,14 +69,10 @@ export async function handleFindAndAttachPdfs(
     // 1. Resolve item keys
     let keys: string[];
     if (collection_key) {
-      const collResponse = await zoteroApi
-        .library("user", userId)
-        .collections(collection_key)
-        .items()
-        .get();
-      const collItems = collResponse.getData() as ZoteroItemData[];
-      const itemsArray = Array.isArray(collItems) ? collItems : [collItems];
-      keys = itemsArray
+      const { items: collItems } = await fetchAllPages((params) =>
+        zoteroApi.library("user", userId).collections(collection_key).items().get(params)
+      );
+      keys = collItems
         .filter((item) => item.itemType !== "attachment" && item.itemType !== "note")
         .map((item) => item.key as string)
         .filter(Boolean);

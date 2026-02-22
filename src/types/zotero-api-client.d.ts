@@ -53,6 +53,7 @@ declare module "zotero-api-client/lib/main-node.cjs" {
   interface ZoteroResponse {
     getData(): ZoteroItem | ZoteroItem[];
     getVersion(): number | null;
+    getTotalResults(): number | null;
   }
 
   interface ZoteroWriteResponse {

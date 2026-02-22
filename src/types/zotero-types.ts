@@ -76,6 +76,7 @@ export interface ZoteroRequestConfig {
 export interface ZoteroResponse {
   getData(): ZoteroItemData | ZoteroItemData[];
   getVersion(): number | null;
+  getTotalResults(): number | null;
 }
 
 export interface ZoteroWriteResponse {

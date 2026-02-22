@@ -57,6 +57,7 @@ export function createZoteroApiMock(
   const getStub = vi.fn().mockResolvedValue({
     getData: () => data,
     getVersion: () => 1,
+    getTotalResults: () => (Array.isArray(data) ? data.length : data ? 1 : 0),
   });
 
   const defaultWriteData: WriteResponseData = writeData ?? {
