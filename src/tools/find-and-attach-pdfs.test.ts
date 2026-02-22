@@ -285,12 +285,12 @@ describe("find_and_attach_pdfs handler", () => {
     });
 
     const { mock, getStub } = createZoteroApiMock([]);
-    // Collection items fetch
-    getStub.mockResolvedValueOnce({ getData: () => [collItem] });
+    // Collection items fetch (via fetchAllPages — needs getTotalResults)
+    getStub.mockResolvedValueOnce({ getData: () => [collItem], getTotalResults: () => 1 });
     // Batch metadata fetch
-    getStub.mockResolvedValueOnce({ getData: () => [collItem] });
+    getStub.mockResolvedValueOnce({ getData: () => [collItem], getTotalResults: () => 1 });
     // Children check
-    getStub.mockResolvedValueOnce({ getData: () => [] });
+    getStub.mockResolvedValueOnce({ getData: () => [], getTotalResults: () => 0 });
 
     const result = await handleToolCall(
       "find_and_attach_pdfs",

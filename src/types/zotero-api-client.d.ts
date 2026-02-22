@@ -52,6 +52,8 @@ declare module "zotero-api-client/lib/main-node.cjs" {
 
   interface ZoteroResponse {
     getData(): ZoteroItem | ZoteroItem[];
+    getVersion(): number | null;
+    getTotalResults(): number | null;
   }
 
   interface ZoteroWriteResponse {
@@ -65,8 +67,10 @@ declare module "zotero-api-client/lib/main-node.cjs" {
     library(type: string, id: string): ZoteroClient;
     collections(key?: string): ZoteroClient;
     items(key?: string): ZoteroClient;
+    version(version: number): ZoteroClient;
     get(params?: Record<string, unknown>): Promise<ZoteroResponse>;
     post(data: unknown[], opts?: Record<string, unknown>): Promise<ZoteroWriteResponse>;
+    delete(keysToDelete?: string[]): Promise<{ getVersion(): number }>;
   }
 
   function api(apiKey: string): ZoteroClient;

@@ -1,6 +1,7 @@
 import { ZoteroApiInterface, isZoteroApiError } from "../types/zotero-types.js";
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import { logger } from "../utils/logger.js";
+import { fetchAllPages } from "../utils/pagination.js";
 
 export const toolConfig = {
   name: "get_collections",
@@ -14,12 +15,9 @@ export async function handleGetCollections(
   _args: Record<string, unknown>
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   try {
-    const response = await zoteroApi
-      .library("user", userId)
-      .collections()
-      .get();
-
-    const collections = response.getData();
+    const { items: collections } = await fetchAllPages((params) =>
+      zoteroApi.library("user", userId).collections().get(params)
+    );
 
     if (!Array.isArray(collections) || collections.length === 0) {
       return formatErrorResponse("No collections found", {

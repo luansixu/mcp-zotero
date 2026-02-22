@@ -96,13 +96,15 @@ describe("get_collection_items", () => {
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].title).toBe("Deep Learning for Natural Language Processing");
-    expect(parsed[0].authors).toBe("John Smith, Jane Doe");
-    expect(parsed[0].date).toBe("2024-01-15");
-    expect(parsed[0].key).toBe("ABC12345");
-    expect(parsed[0].doi).toBe("10.1234/example.2024.001");
-    expect(parsed[0].tags).toEqual(["deep-learning", "NLP"]);
+    expect(parsed.total_items).toBe(1);
+    expect(parsed.returned_items).toBe(1);
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0].title).toBe("Deep Learning for Natural Language Processing");
+    expect(parsed.items[0].authors).toBe("John Smith, Jane Doe");
+    expect(parsed.items[0].date).toBe("2024-01-15");
+    expect(parsed.items[0].key).toBe("ABC12345");
+    expect(parsed.items[0].doi).toBe("10.1234/example.2024.001");
+    expect(parsed.items[0].tags).toEqual(["deep-learning", "NLP"]);
   });
 
   it("uses fallback values for minimal items", async () => {
@@ -115,11 +117,11 @@ describe("get_collection_items", () => {
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed[0].title).toBe("Untitled");
-    expect(parsed[0].authors).toBe("No authors listed");
-    expect(parsed[0].date).toBe("No date");
-    expect(parsed[0].doi).toBeNull();
-    expect(parsed[0].tags).toEqual([]);
+    expect(parsed.items[0].title).toBe("Untitled");
+    expect(parsed.items[0].authors).toBe("No authors listed");
+    expect(parsed.items[0].date).toBe("No date");
+    expect(parsed.items[0].doi).toBeNull();
+    expect(parsed.items[0].tags).toEqual([]);
   });
 
   it("returns error for empty collection", async () => {
@@ -148,8 +150,10 @@ describe("get_collection_items", () => {
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].key).toBe("ABC12345");
+    expect(parsed.total_items).toBe(3);
+    expect(parsed.returned_items).toBe(1);
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0].key).toBe("ABC12345");
   });
 
   it("includes attachments and notes when excludeAttachments is false", async () => {
@@ -163,7 +167,9 @@ describe("get_collection_items", () => {
     );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toHaveLength(2);
+    expect(parsed.total_items).toBe(2);
+    expect(parsed.returned_items).toBe(2);
+    expect(parsed.items).toHaveLength(2);
   });
 
   it("returns not_found error on 404", async () => {
@@ -1714,6 +1720,356 @@ describe("import_pdf_to_zotero", () => {
     expect(parsed.item_key).toBe("IMP013");
     expect(parsed.fulltext_indexed).toBe(false);
     expect(parsed.fulltext_status).toContain("Non-PDF content type");
+  });
+});
+
+// ─── delete_collection ──────────────────────────────────────────
+
+describe("delete_collection", () => {
+  it("returns permission error when unsafeOps is 'none'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID,
+      "none"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+    expect(parsed.env_var).toBe("UNSAFE_OPERATIONS");
+    expect(parsed.current_value).toBe("none");
+    expect(parsed.required_values).toEqual(["all"]);
+  });
+
+  it("returns permission error when unsafeOps is 'items'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+    expect(parsed.current_value).toBe("items");
+  });
+
+  it("returns permission error when unsafeOps defaults to 'none'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+  });
+
+  it("deletes collection successfully with 'all' mode", async () => {
+    const collectionData = { key: "COL001", name: "Test Collection", version: 5 };
+    const { mock, deleteStub } = createZoteroApiMock(collectionData);
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID,
+      "all"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.deleted).toBe(true);
+    expect(parsed.collection_key).toBe("COL001");
+    expect(parsed.name).toBe("Test Collection");
+    expect(deleteStub).toHaveBeenCalled();
+  });
+
+  it("returns error for non-existent collection (404)", async () => {
+    const { mock, getStub } = createZoteroApiMock([]);
+    const error404 = new Error("Not found") as Error & { response?: { status: number } };
+    error404.response = { status: 404 };
+    getStub.mockRejectedValueOnce(error404);
+
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "MISSING" },
+      mock,
+      TEST_USER_ID,
+      "all"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("Collection not found");
+    expect(parsed.status).toBe("not_found");
+  });
+
+  it("returns error on version conflict (412)", async () => {
+    const { mock, getStub } = createZoteroApiMock([]);
+    const error412 = new Error("Precondition failed") as Error & { response?: { status: number } };
+    error412.response = { status: 412 };
+    getStub.mockRejectedValueOnce(error412);
+
+    const result = await handleToolCall(
+      "delete_collection",
+      { collection_key: "COL001" },
+      mock,
+      TEST_USER_ID,
+      "all"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("modified by another client");
+    expect(parsed.status).toBe("version_conflict");
+  });
+});
+
+// ─── delete_items ───────────────────────────────────────────────
+
+describe("delete_items", () => {
+  it("returns permission error when unsafeOps is 'none'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1"] },
+      mock,
+      TEST_USER_ID,
+      "none"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+    expect(parsed.env_var).toBe("UNSAFE_OPERATIONS");
+    expect(parsed.current_value).toBe("none");
+    expect(parsed.required_values).toEqual(["items", "all"]);
+  });
+
+  it("returns permission error when unsafeOps defaults to 'none'", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1"] },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("not allowed");
+  });
+
+  it("deletes items successfully with 'items' mode", async () => {
+    const itemsData = [
+      { key: "KEY1", version: 5, title: "Item 1" },
+      { key: "KEY2", version: 3, title: "Item 2" },
+    ];
+    const { mock, deleteStub } = createZoteroApiMock(itemsData);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1", "KEY2"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.deleted_count).toBe(2);
+    expect(parsed.deleted_keys).toEqual(expect.arrayContaining(["KEY1", "KEY2"]));
+    expect(parsed.not_found).toBeUndefined();
+    expect(deleteStub).toHaveBeenCalled();
+  });
+
+  it("deletes items successfully with 'all' mode", async () => {
+    const itemsData = [{ key: "KEY1", version: 2, title: "Item 1" }];
+    const { mock } = createZoteroApiMock(itemsData);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1"] },
+      mock,
+      TEST_USER_ID,
+      "all"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.deleted_count).toBe(1);
+    expect(parsed.deleted_keys).toEqual(["KEY1"]);
+  });
+
+  it("reports not_found keys in partial deletion", async () => {
+    const itemsData = [{ key: "KEY1", version: 4, title: "Item 1" }];
+    const { mock } = createZoteroApiMock(itemsData);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1", "MISSING1"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.deleted_count).toBe(1);
+    expect(parsed.deleted_keys).toEqual(["KEY1"]);
+    expect(parsed.not_found).toEqual(["MISSING1"]);
+  });
+
+  it("returns error when all keys not found", async () => {
+    const { mock } = createZoteroApiMock([]);
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["MISS1", "MISS2"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toBe("No items found for the given keys");
+    expect(parsed.status).toBe("not_found");
+  });
+
+  it("returns error on version conflict (412)", async () => {
+    const itemsData = [{ key: "KEY1", version: 5, title: "Item 1" }];
+    const { mock, getStub, deleteStub } = createZoteroApiMock(itemsData);
+    const error412 = new Error("Precondition failed") as Error & { response?: { status: number } };
+    error412.response = { status: 412 };
+    // First get succeeds (returns items), then delete throws 412
+    deleteStub.mockRejectedValueOnce(error412);
+
+    const result = await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.error).toContain("modified by another client");
+    expect(parsed.status).toBe("version_conflict");
+  });
+
+  it("passes correct keys to delete API call", async () => {
+    const itemsData = [
+      { key: "KEY1", version: 10, title: "Item 1" },
+      { key: "KEY2", version: 8, title: "Item 2" },
+    ];
+    const { mock, deleteStub } = createZoteroApiMock(itemsData);
+    await handleToolCall(
+      "delete_items",
+      { item_keys: ["KEY1", "KEY2"] },
+      mock,
+      TEST_USER_ID,
+      "items"
+    );
+
+    expect(deleteStub).toHaveBeenCalledWith(
+      expect.arrayContaining(["KEY1", "KEY2"])
+    );
+  });
+});
+
+// ─── Pagination integration tests ───────────────────────────────
+
+describe("pagination: get_collection_items", () => {
+  it("fetches all items across multiple pages (150 items)", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      key: `K${i}`,
+      itemType: "journalArticle",
+      title: `Paper ${i}`,
+    }));
+    const page2 = Array.from({ length: 50 }, (_, i) => ({
+      key: `K${100 + i}`,
+      itemType: "journalArticle",
+      title: `Paper ${100 + i}`,
+    }));
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub
+      .mockResolvedValueOnce({ getData: () => page1, getTotalResults: () => 150 })
+      .mockResolvedValueOnce({ getData: () => page2, getTotalResults: () => 150 });
+
+    const result = await handleToolCall(
+      "get_collection_items",
+      { collectionKey: "COL001" },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.total_items).toBe(150);
+    expect(parsed.returned_items).toBe(150);
+    expect(parsed.items).toHaveLength(150);
+    expect(getStub).toHaveBeenCalledTimes(2);
+    expect(getStub).toHaveBeenCalledWith({ limit: 100, start: 0 });
+    expect(getStub).toHaveBeenCalledWith({ limit: 100, start: 100 });
+  });
+});
+
+describe("pagination: get_collections", () => {
+  it("fetches all collections across multiple pages (130 collections)", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      key: `C${i}`,
+      name: `Collection ${i}`,
+    }));
+    const page2 = Array.from({ length: 30 }, (_, i) => ({
+      key: `C${100 + i}`,
+      name: `Collection ${100 + i}`,
+    }));
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    getStub
+      .mockResolvedValueOnce({ getData: () => page1, getTotalResults: () => 130 })
+      .mockResolvedValueOnce({ getData: () => page2, getTotalResults: () => 130 });
+
+    const result = await handleToolCall("get_collections", {}, mock, TEST_USER_ID);
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveLength(130);
+    expect(getStub).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("pagination: find_and_attach_pdfs with collection_key", () => {
+  it("fetches all collection items across multiple pages (120 items)", async () => {
+    const ORIGINAL_ENV = process.env;
+    process.env = { ...ORIGINAL_ENV, ZOTERO_API_KEY: "test-api-key" };
+
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      key: `K${i}`,
+      itemType: "journalArticle",
+    }));
+    const page2 = Array.from({ length: 20 }, (_, i) => ({
+      key: `K${100 + i}`,
+      itemType: "journalArticle",
+    }));
+    // Metadata items (only first 100 via itemKey batch)
+    const allItems = [...page1, ...page2].map((item) => ({
+      ...item,
+      DOI: `10.1234/${item.key}`,
+    }));
+
+    const { mock, getStub } = createZoteroApiMock([]);
+    // Page 1 of collection items (via fetchAllPages)
+    getStub.mockResolvedValueOnce({ getData: () => page1, getTotalResults: () => 120 });
+    // Page 2 of collection items (via fetchAllPages)
+    getStub.mockResolvedValueOnce({ getData: () => page2, getTotalResults: () => 120 });
+    // Batch metadata fetch — returns items with DOIs
+    getStub.mockResolvedValueOnce({ getData: () => allItems, getTotalResults: () => 120 });
+
+    const result = await handleToolCall(
+      "find_and_attach_pdfs",
+      { collection_key: "COL001", dry_run: true, skip_if_attachment_exists: false },
+      mock,
+      TEST_USER_ID
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.processed).toBe(120);
+
+    process.env = ORIGINAL_ENV;
   });
 });
 

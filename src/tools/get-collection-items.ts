@@ -3,6 +3,7 @@ import { ZoteroApiInterface, ZoteroItemData, isZoteroApiError } from "../types/z
 import { formatErrorResponse } from "../utils/error-formatter.js";
 import { formatCreators, formatTags } from "../utils/item-formatter.js";
 import { logger } from "../utils/logger.js";
+import { fetchAllPages } from "../utils/pagination.js";
 
 export const toolConfig = {
   name: "get_collection_items",
@@ -28,15 +29,11 @@ export async function handleGetCollectionItems(
   const { collectionKey, excludeAttachments } = CollectionItemsSchema.parse(args);
 
   try {
-    const response = await zoteroApi
-      .library("user", userId)
-      .collections(collectionKey)
-      .items()
-      .get();
+    const { items: allItems, totalResults } = await fetchAllPages((params) =>
+      zoteroApi.library("user", userId).collections(collectionKey).items().get(params)
+    );
 
-    let items = response.getData();
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
+    if (!allItems || allItems.length === 0) {
       return formatErrorResponse("Collection is empty", {
         collectionKey,
         suggestion: "Add some items to this collection in Zotero",
@@ -44,6 +41,7 @@ export async function handleGetCollectionItems(
       });
     }
 
+    let items = allItems;
     if (excludeAttachments) {
       items = items.filter(
         (item: ZoteroItemData) =>
@@ -81,7 +79,15 @@ export async function handleGetCollectionItems(
       content: [
         {
           type: "text",
-          text: JSON.stringify(formatted, null, 2),
+          text: JSON.stringify(
+            {
+              total_items: totalResults,
+              returned_items: formatted.length,
+              items: formatted,
+            },
+            null,
+            2
+          ),
         },
       ],
     };

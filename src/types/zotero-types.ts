@@ -75,6 +75,8 @@ export interface ZoteroRequestConfig {
 
 export interface ZoteroResponse {
   getData(): ZoteroItemData | ZoteroItemData[];
+  getVersion(): number | null;
+  getTotalResults(): number | null;
 }
 
 export interface ZoteroWriteResponse {
@@ -84,6 +86,10 @@ export interface ZoteroWriteResponse {
   getEntityByIndex(index: number): ZoteroItemData;
 }
 
+export interface ZoteroDeleteResponse {
+  getVersion(): number;
+}
+
 export interface ZoteroApiInterface {
   library(type: string, id: number | string): ZoteroApiInterface;
   collections(key?: string): ZoteroApiInterface;
@@ -91,8 +97,10 @@ export interface ZoteroApiInterface {
   children(): ZoteroApiInterface;
   top(): ZoteroApiInterface;
   trash(): ZoteroApiInterface;
+  version(version: number): ZoteroApiInterface;
   get(config?: Record<string, unknown>): Promise<ZoteroResponse>;
   post(data: unknown[], opts?: Record<string, unknown>): Promise<ZoteroWriteResponse>;
+  delete(keysToDelete?: string[]): Promise<ZoteroDeleteResponse>;
 }
 
 export interface ZoteroFulltextResponse {
