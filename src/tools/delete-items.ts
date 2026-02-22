@@ -7,7 +7,7 @@ import { logger } from "../utils/logger.js";
 export const toolConfig = {
   name: "delete_items",
   description:
-    "Delete one or more items from your Zotero library permanently (moves to trash). Accepts up to 50 item keys per call. Requires UNSAFE_OPERATIONS environment variable set to 'items' or 'both'.",
+    "Delete one or more items from your Zotero library permanently (moves to trash). Accepts up to 50 item keys per call. Requires UNSAFE_OPERATIONS environment variable set to 'items' or 'all'.",
   inputSchema: {
     item_keys: z
       .array(z.string())

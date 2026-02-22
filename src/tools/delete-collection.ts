@@ -7,7 +7,7 @@ import { logger } from "../utils/logger.js";
 export const toolConfig = {
   name: "delete_collection",
   description:
-    "Delete a collection (folder) from your Zotero library. Items inside the collection are NOT deleted — they remain in your library. Requires UNSAFE_OPERATIONS environment variable set to 'collections' or 'both'.",
+    "Delete a collection (folder) from your Zotero library. Items inside the collection are NOT deleted — they remain in your library. Requires UNSAFE_OPERATIONS environment variable set to 'all'.",
   inputSchema: {
     collection_key: z
       .string()
