@@ -23,3 +23,48 @@ jobs:
       - run: npm run build
 
       - run: npm test
+
+      - name: Validate packaging (npx compatibility)
+        run: |
+          set -euo pipefail
+
+          # 1. "bin" field must exist in package.json
+          BIN_PATH=$(node -e "
+            const pkg = require('./package.json');
+            const bin = pkg.bin;
+            if (!bin) { console.error('missing bin field'); process.exit(1); }
+            const entry = typeof bin === 'string' ? bin : Object.values(bin)[0];
+            console.log(entry);
+          ")
+          echo "bin entry: $BIN_PATH"
+
+          # 2. The bin target must exist after build
+          if [ ! -f "$BIN_PATH" ]; then
+            echo "::error::bin target '$BIN_PATH' not found after build"
+            exit 1
+          fi
+
+          # 3. Must have a Node.js shebang
+          HEAD=$(head -c 30 "$BIN_PATH")
+          if [[ "$HEAD" != "#!/usr/bin/env node"* ]]; then
+            echo "::error::bin target '$BIN_PATH' is missing shebang (#!/usr/bin/env node)"
+            exit 1
+          fi
+
+          # 4. npm pack + install in sandbox: verify the command is resolvable
+          TARBALL=$(npm pack --pack-destination /tmp 2>/dev/null)
+          SANDBOX=$(mktemp -d)
+          npm install --prefix "$SANDBOX" "/tmp/$TARBALL" --ignore-scripts
+          PKG_NAME=$(node -e "console.log(require('./package.json').name)")
+          BIN_NAME=$(node -e "
+            const bin = require('./package.json').bin;
+            console.log(typeof bin === 'string' ? require('./package.json').name.split('/').pop() : Object.keys(bin)[0]);
+          ")
+          RESOLVED="$SANDBOX/node_modules/.bin/$BIN_NAME"
+          if [ ! -e "$RESOLVED" ]; then
+            echo "::error::After npm install, bin '$BIN_NAME' not found in $SANDBOX/node_modules/.bin/"
+            ls -la "$SANDBOX/node_modules/.bin/" || true
+            exit 1
+          fi
+          echo "npx simulation OK: $RESOLVED"
+          rm -rf "$SANDBOX"
