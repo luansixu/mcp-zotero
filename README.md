@@ -159,7 +159,7 @@ claude mcp add-json "zotero" '{"command":"npx","args":["tsx","src/server.ts"],"e
 ```bash
 npm install
 npm run build          # Compile TypeScript
-npm test               # Run tests (vitest, 369 tests)
+npm test               # Run tests (vitest, 377 tests)
 npx tsx src/server.ts  # Run directly without building
 ```
 
