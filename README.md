@@ -17,12 +17,18 @@ For advanced use cases (PDF upload policy, citation style guidance, source trans
 
 | Scenario | MCP server | Skill needed? |
 |---|---|---|
-| Local LLM (Claude Code, LM Studio, etc.) | All 15 tools | No |
-| Remote/sandboxed LLM (Claude.ai Projects) | API tools (search, add, metadata) | Yes, for citation injection |
+| LLM with filesystem access (Claude Code, LM Studio, etc.) | All 15 tools | No |
+| LLM without filesystem access (Claude.ai Projects, Claude Desktop) | API tools (search, add, metadata) | Yes, for citation injection |
 
-Local LLMs with filesystem access can use all tools directly, including `inject_citations` which reads and writes `.docx` files on disk.
+LLMs with filesystem access can use all tools directly, including `inject_citations` which reads and writes `.docx` files on disk.
 
-Remote LLMs without filesystem access can use the included **Claude skill** (`skills/zotero-skill-mcp-integrations/`), which runs citation injection entirely inside the sandbox. MCP tools handle all Zotero API operations; the skill handles document assembly.
+LLMs without filesystem access — including Claude Desktop, which connects to MCP but cannot generate files locally — can use the included **Claude skill** (`skills/zotero-skill-mcp-integrations/`), which runs citation injection entirely inside a sandbox. MCP tools handle all Zotero API operations; the skill handles document assembly.
+
+### Claude Skill Setup (for Claude.ai Projects and Claude Desktop)
+
+1. Download the skill `.zip` from the latest [GitHub Release](https://github.com/Xevos117/mcp-zotero/releases)
+2. Extract it and upload the folder to your Claude.ai Project as a skill
+3. The skill enables citation injection directly inside the sandbox, without requiring local filesystem access
 
 ## Setup
 
