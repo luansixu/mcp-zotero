@@ -150,12 +150,37 @@ export async function handleAddItemsByDoi(
       .items()
       .post(zoteroItems);
 
+    // Check if the write operation was successful
+    if (!response.isSuccess()) {
+      const errors = response.getErrors();
+      console.error("Zotero API errors:", JSON.stringify(errors, null, 2));
+      const errorMessages = Object.entries(errors).map(([idx, msg]) =>
+        `Item ${idx}: ${typeof msg === 'object' ? JSON.stringify(msg) : msg}`
+      ).join(", ");
+      throw new Error(`Zotero API write failed: ${errorMessages}`);
+    }
+
     const createdItems = response.getData();
-    const success = resolved.success.map((r, i) => ({
-      doi: r.doi,
-      item_key: createdItems[i]?.key ?? "unknown",
-      title: createdItems[i]?.title ?? r.data.title ?? "Untitled",
-    }));
+    // Check if we got valid data back
+    if (!createdItems || !Array.isArray(createdItems) || createdItems.length === 0) {
+      throw new Error("Zotero API returned empty response - items may not have been created");
+    }
+
+    const success = resolved.success.map((r, i) => {
+      // Use getEntityByIndex for more reliable access
+      const entity = response.getEntityByIndex(i);
+      const itemKey = entity?.key;
+      if (!itemKey) {
+        console.error("Entity at index", i, entity);
+        console.error("Full createdItems:", JSON.stringify(createdItems, null, 2));
+        throw new Error(`Failed to get item key for DOI ${r.doi} at index ${i}. API response may be invalid.`);
+      }
+      return {
+        doi: r.doi,
+        item_key: itemKey,
+        title: entity?.title ?? r.data.title ?? "Untitled",
+      };
+    });
 
     let pdf_results: PdfAttachResult[] | undefined;
     if (auto_attach_pdf) {

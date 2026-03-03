@@ -1,15 +1,15 @@
 {
-  "name": "@xevos117/mcp-zotero",
+  "name": "@luansixu/mcp-zotero",
   "type": "module",
-  "version": "1.0.6",
-  "description": "Unofficial MCP server for Zotero integration with citation management",
+  "version": "1.0.7",
+  "description": "Unofficial MCP server for Zotero integration with citation management (Fixed version)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Xevos117/mcp-zotero.git"
+    "url": "git+https://github.com/luansixu/mcp-zotero.git"
   },
-  "homepage": "https://github.com/Xevos117/mcp-zotero#readme",
+  "homepage": "https://github.com/luansixu/mcp-zotero#readme",
   "bugs": {
-    "url": "https://github.com/Xevos117/mcp-zotero/issues"
+    "url": "https://github.com/luansixu/mcp-zotero/issues"
   },
   "main": "build/server.js",
   "bin": {
@@ -39,7 +39,7 @@
     "claude",
     "ai"
   ],
-  "author": "Xevos17",
+  "author": "luansixu",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
